@@ -4,6 +4,7 @@ import type { World } from '../sim/World';
 import type { InputCommand, SimEvent } from '../sim/types';
 import { AssetLibrary } from './AssetLibrary';
 import { FighterView } from './FighterView';
+import { CombatView } from './CombatView';
 
 interface Particle { active: boolean; x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: number }
 const MATERIAL_COLORS = [0, 0x77634a, 0xa47a48, 0x647270, 0x435d63, 0x87c8c4, 0x29383f];
@@ -11,6 +12,7 @@ const MATERIAL_COLORS = [0, 0x77634a, 0xa47a48, 0x647270, 0x435d63, 0x87c8c4, 0x
 export class ArenaScene extends Phaser.Scene {
   public paused = false;
   public debug = false;
+  public onTick?: () => void;
   private accumulator = 0;
   private terrainRevision = -1;
   private terrainArt!: Phaser.GameObjects.Graphics;
@@ -24,6 +26,7 @@ export class ArenaScene extends Phaser.Scene {
   private focusX = 0;
   private focusY = 0;
   private visualTime = 0;
+  private combatView!: CombatView;
 
   constructor(public world: World, private readonly getCommands: () => Record<number, InputCommand>) {
     super({ key: 'ArenaScene' });
@@ -38,6 +41,7 @@ export class ArenaScene extends Phaser.Scene {
     this.terrainArt = this.add.graphics().setVisible(false);
     this.drawProps();
     this.effectsArt = this.add.graphics().setDepth(30);
+    this.combatView = new CombatView(this, this.world);
     this.debugArt = this.add.graphics().setDepth(45);
     this.debugText = this.add.text(16, 16, '', {
       fontFamily: 'monospace', fontSize: '12px', color: '#c8ffee', backgroundColor: '#0d1825', padding: {x:12,y:10},
@@ -53,6 +57,7 @@ export class ArenaScene extends Phaser.Scene {
       this.scale.off('resize', this.onResize, this);
       for (const view of this.views.values()) view.destroy();
       this.views.clear();
+      this.combatView.destroy();
     });
     this.drawTerrain();
   }
@@ -71,11 +76,14 @@ export class ArenaScene extends Phaser.Scene {
           console.warn('Simulation tick exceeded its 4 ms budget');
         }
         for (const event of this.world.events) this.visualEvent(event);
+        this.events.emit('simtick');
+        this.onTick?.();
         this.accumulator -= fixedMs; steps++;
       }
       if (steps === TUNING.performance.maxFrameSteps) this.accumulator = 0;
       this.updateParticles(elapsed / 1000);
     } else this.accumulator = 0;
+    this.combatView.update(this.visualTime, this.paused ? 0 : elapsed / 1000);
     if (this.terrainRevision !== this.world.terrain.revision) this.drawTerrain();
     for (const fighter of this.world.fighters) {
       let view = this.views.get(fighter.id);
@@ -234,6 +242,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private visualEvent(event: SimEvent): void {
+    this.combatView.event(event);
     if (event.type === 'land') this.emitDust(event.x, event.y, 10, 0xb4baa0, Math.min(1.5, event.intensity ?? 1));
     if (event.type === 'jump') this.emitDust(event.x, event.y + 18, 6, 0xb5b49b, 0.7);
     if (event.type === 'roll') this.emitDust(event.x, event.y + 16, 8, 0xadbaaa, 0.9);
@@ -263,7 +272,7 @@ export class ArenaScene extends Phaser.Scene {
     const g = this.debugArt; g.clear(); this.debugText.setVisible(this.debug);
     if (!this.debug) return;
     const camera = this.cameras.main;
-    this.debugText.setScale(1 / camera.zoom).setPosition(camera.worldView.right - 16 / camera.zoom, camera.worldView.top + 16 / camera.zoom);
+    this.debugText.setScale(1 / camera.zoom).setPosition(camera.worldView.right - 28 / camera.zoom, camera.worldView.top + 180 / camera.zoom);
     for (const fighter of this.world.fighters) {
       if (!fighter.alive) continue;
       g.lineStyle(1, 0x8bffbe).strokeRect(fighter.x - fighter.width / 2, fighter.y - fighter.height / 2, fighter.width, fighter.height);
@@ -271,6 +280,7 @@ export class ArenaScene extends Phaser.Scene {
       if (fighter.ledge) g.fillStyle(0xff8f9a).fillCircle(fighter.ledge.x, fighter.ledge.y, 4);
     }
     for (const prop of this.world.arena.props) if (prop.type === 'ladder' || prop.type === 'rope') g.lineStyle(1, 0x77c5e5, 0.5).strokeRect(prop.x, prop.y, prop.width, prop.height);
+    for (const hitbox of this.world.hitboxes) g.lineStyle(1, 0xff705c).strokeRect(hitbox.x-hitbox.width/2,hitbox.y-hitbox.height/2,hitbox.width,hitbox.height);
     const first = this.world.fighters[0];
     this.debugText.setText([`SIM ${this.world.tick} · ${Math.round(this.game.loop.actualFps)} FPS · 60 HZ`, `STATE ${first?.action ?? '—'} · ${first?.grounded ? 'GROUND' : 'AIR'}`,`VELOCITY ${first?.vx.toFixed(0) ?? 0}, ${first?.vy.toFixed(0) ?? 0}`,`F1  HIDE DEBUG`]);
   }

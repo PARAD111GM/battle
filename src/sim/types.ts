@@ -1,3 +1,4 @@
+import type { CombatState } from './weapons/types';
 export interface Vec2 { x: number; y: number }
 export interface InputCommand {
   moveX: number; moveY: number; aimX: number; aimY: number;
@@ -14,7 +15,8 @@ export interface Fighter {
   grounded: boolean; coyoteTicks: number; jumpBufferTicks: number; jumpHeld: boolean;
   action: ActionState; actionTicks: number; rollCooldown: number; invulnerableTicks: number;
   respawnTicks: number; climbing: boolean; ledge: Vec2 | null; rollHeld: boolean; climbCooldownTicks: number;
+  combat: CombatState;
 }
-export interface SimEvent { type: string; x: number; y: number; fighterId?: number; amount?: number; color?: number; text?: string; intensity?: number }
+export interface SimEvent { type: string; x: number; y: number; fighterId?: number; amount?: number; color?: number; text?: string; intensity?: number; endX?:number;endY?:number;weapon?:string }
 export interface ArenaProp { id: number; type: string; x: number; y: number; width: number; height: number; [key: string]: unknown }
 export interface ArenaData { id: string; name: string; subtitle: string; width: number; height: number; tileSize: number; tiles: number[]; spawns: Vec2[]; props: ArenaProp[]; weaponSpawns: Vec2[]; background: string }

@@ -15,6 +15,7 @@ function nearbyClimbable(fighter: Fighter, props: ArenaProp[]): ArenaProp | unde
 }
 
 function jump(fighter: Fighter, command: InputCommand, events: SimEvent[], speed: number = M.jumpSpeed): void {
+  const actionBeforeJump = fighter.action;
   fighter.vy = -speed * (command.jump ? 1 : M.jumpCut);
   fighter.grounded = false;
   fighter.climbing = false;
@@ -22,7 +23,7 @@ function jump(fighter: Fighter, command: InputCommand, events: SimEvent[], speed
   fighter.coyoteTicks = 0;
   fighter.jumpBufferTicks = 0;
   fighter.climbCooldownTicks = M.climbJumpLockTicks;
-  fighter.action = 'jump';
+  fighter.action = actionBeforeJump.startsWith('melee-') || ['shoot', 'reload', 'throw-windup', 'throw-recovery', 'special'].includes(actionBeforeJump) ? actionBeforeJump : 'jump';
   events.push({ type: 'jump', fighterId: fighter.id, x: fighter.x, y: fighter.y + fighter.height / 2 });
 }
 
@@ -67,6 +68,17 @@ export function stepMovement(fighter: Fighter, command: InputCommand, map: TileM
   fighter.grounded = fighter.grounded && hasGroundSupport(fighter, map);
   fighter.coyoteTicks = fighter.grounded ? M.coyoteTicks : Math.max(0, fighter.coyoteTicks - 1);
 
+  if (fighter.combat.stunTicks > 0) {
+    fighter.climbing = false;
+    fighter.ledge = null;
+    fighter.action = 'stunned';
+    fighter.vx *= fighter.grounded ? 0.87 : 0.993;
+    fighter.vy = Math.min(fighter.vy + M.gravity * TUNING.dt, M.maxFallSpeed);
+    moveAndCollide(fighter, map, TUNING.dt);
+    return;
+  }
+  const combatAction = fighter.action.startsWith('melee-') || ['shoot', 'reload', 'throw-windup', 'throw-recovery', 'block', 'special'].includes(fighter.action);
+
   if (fighter.ledge) {
     const ledge = fighter.ledge;
     if (jumpPressed) {
@@ -95,7 +107,7 @@ export function stepMovement(fighter: Fighter, command: InputCommand, map: TileM
 
   if (moveX !== 0 && fighter.action !== 'roll') fighter.facing = Math.sign(moveX);
   const climbable = nearbyClimbable(fighter, props);
-  if (!fighter.climbing && fighter.action !== 'roll' && fighter.climbCooldownTicks === 0 && fighter.vy >= 0 && !jumpPressed && Math.abs(moveY) > 0.25 && climbable) {
+  if (!combatAction && !fighter.climbing && fighter.action !== 'roll' && fighter.climbCooldownTicks === 0 && fighter.vy >= 0 && !jumpPressed && Math.abs(moveY) > 0.25 && climbable) {
     fighter.climbing = true;
     fighter.ledge = null;
   }
@@ -125,7 +137,7 @@ export function stepMovement(fighter: Fighter, command: InputCommand, map: TileM
     fighter.actionTicks = Math.max(0, fighter.actionTicks - 1);
     if (fighter.actionTicks === 0) fighter.action = fighter.grounded ? 'idle' : 'fall';
   }
-  if (rollPressed && fighter.rollCooldown === 0 && fighter.grounded && fighter.action !== 'roll') {
+  if (!combatAction && rollPressed && fighter.rollCooldown === 0 && fighter.grounded && fighter.action !== 'roll') {
     fighter.action = 'roll';
     fighter.actionTicks = M.rollTicks;
     fighter.rollCooldown = M.rollCooldownTicks;
@@ -149,7 +161,7 @@ export function stepMovement(fighter: Fighter, command: InputCommand, map: TileM
     events.push({ type: 'land', fighterId: fighter.id, x: fighter.x, y: fighter.y + fighter.height / 2, intensity: Math.min(1, landingSpeed / M.maxFallSpeed) });
     if (fighter.jumpBufferTicks > 0 && fighter.action !== 'roll') jump(fighter, command, events);
   }
-  if (fighter.action !== 'roll') {
+  if (fighter.action !== 'roll' && !combatAction) {
     fighter.action = fighter.grounded ? (Math.abs(fighter.vx) > 10 ? 'run' : 'idle') : (fighter.vy < 0 ? 'jump' : 'fall');
     tryGrabLedge(fighter, map, moveX, moveY, events);
   }

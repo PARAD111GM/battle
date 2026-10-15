@@ -18,3 +18,9 @@ Validation evidence is recorded when each milestone is completed.
 Implemented and validated: fixed-step headless simulation, swept AABB terrain collision, responsive locomotion, roll immunity, coyote/buffer/variable jumps, fast fall, ladder/rope climbs, ledge hangs/climbs/drops, original procedural factory art, follow camera, F1 collision display, and pause.
 
 Validation: 15 Vitest tests passed, strict TypeScript and Vite production build passed, Chromium input smoke passed with no page errors. Actual authored climb routes are tested. Software-rendered headless browser timing is unsuitable for a hardware FPS claim; smoke checks wait for simulation progress. Try A/D, Space tap/hold, Shift, and W/S at ladders. Combat is deliberately absent at this checkpoint.
+
+### Milestone 2 — combat core
+
+Implemented: phased unarmed combo/uppercut/divekick, guard break, grab/throw, pistol/SMG/shotgun, data-driven hitscan guns, finite magazines/reserves, automatic and interact reload, pickup switching, cooked bouncing grenades, knockback, health/KO/respawn, persistent match stats, local keyboard/gamepad adapters, and combat HUD/feedback.
+
+Validation: 37 simulation tests passed (including 22 combat cases), strict build passed, Chromium movement/fire-damage/emulated-gamepad checks passed without page errors. Fixed a double roll-timer update caught by the retained movement tests. Physical gamepads have not been connected to the cloud machine. Terrain is intentionally solid until milestone 3.

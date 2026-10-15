@@ -43,3 +43,21 @@ If the default npm cache is not writable in a cloud environment, use `npm ci --c
 All movement tuning lives in `src/data/tuning.ts`. Arena JSON defines grid dimensions, flat material tile array, spawn positions, prop rectangles, weapon spawns, and presentation metadata. Add an arena file in `src/data/arenas` and register it in `src/data/arenas.ts`.
 
 See [DECISIONS.md](DECISIONS.md) for scope choices and milestone evidence.
+
+## Combat controls
+
+| Action | Player 1 | Player 2 (split keyboard) | Standard gamepad |
+| --- | --- | --- | --- |
+| Move / climb | WASD | Arrow keys | Left stick / D-pad |
+| Aim | Mouse / eight-direction movement | Arrow keys | Right stick |
+| Jump | Space | Enter | A / Cross |
+| Melee / throw grabbed fighter | J / right mouse | Comma | X / Square |
+| Fire | K / left mouse | Period | Right trigger |
+| Cook / release grenade | Hold / release G | Slash | Right bumper |
+| Roll | Left Shift | Right Shift | B / Circle |
+| Block | L | Quote | Left trigger |
+| Pick up / grab | E | Backslash | Left bumper |
+| Cycle weapon | R; 1/2/3 select slots | Right bracket | Left stick click |
+| Special (later milestone) | Q | Semicolon | Y / Triangle |
+
+Player 2 uses the first connected gamepad, or the split keyboard if no pad is connected. Press a pad button to make it visible to the browser. Gamepad adapter tests use an emulated standard Gamepad API; physical controllers require device testing. Releasing jump early makes a short hop. Up + melee uppercuts; down + melee in the air dive-kicks. Tap melee in sequence for a three-hit combo. Interact near an enemy grabs them; melee throws the grabbed fighter. Bullets bypass block. Empty magazines reload automatically when firing.
