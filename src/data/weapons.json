@@ -1,6 +1,62 @@
 {
-  "pistol": {"name":"Service Pistol","kind":"gun","slot":"sidearm","damage":16,"magazine":12,"reserve":72,"cooldownTicks":15,"reloadTicks":84,"range":1100,"pellets":1,"spread":0.015,"recoil":28},
-  "smg": {"name":"Viper SMG","kind":"gun","slot":"primary","damage":9,"magazine":30,"reserve":150,"cooldownTicks":6,"reloadTicks":108,"range":1000,"pellets":1,"spread":0.055,"recoil":17},
-  "shotgun": {"name":"Breach Shotgun","kind":"gun","slot":"primary","damage":8,"magazine":6,"reserve":36,"cooldownTicks":46,"reloadTicks":132,"range":650,"pellets":7,"spread":0.16,"recoil":105},
-  "unarmed": {"name":"Bare Knuckles","kind":"melee","slot":"melee","damage":10,"magazine":0,"reserve":0,"cooldownTicks":0,"reloadTicks":0,"range":48,"pellets":0,"spread":0,"recoil":0}
+  "pistol": {
+    "name": "Service Pistol",
+    "kind": "gun",
+    "slot": "sidearm",
+    "damage": 16,
+    "magazine": 12,
+    "reserve": 72,
+    "cooldownTicks": 15,
+    "reloadTicks": 84,
+    "range": 1100,
+    "pellets": 1,
+    "spread": 0.015,
+    "recoil": 28,
+    "terrainPower": 8
+  },
+  "smg": {
+    "name": "Viper SMG",
+    "kind": "gun",
+    "slot": "primary",
+    "damage": 9,
+    "magazine": 30,
+    "reserve": 150,
+    "cooldownTicks": 6,
+    "reloadTicks": 108,
+    "range": 1000,
+    "pellets": 1,
+    "spread": 0.055,
+    "recoil": 17,
+    "terrainPower": 5
+  },
+  "shotgun": {
+    "name": "Breach Shotgun",
+    "kind": "gun",
+    "slot": "primary",
+    "damage": 8,
+    "magazine": 6,
+    "reserve": 36,
+    "cooldownTicks": 46,
+    "reloadTicks": 132,
+    "range": 650,
+    "pellets": 7,
+    "spread": 0.16,
+    "recoil": 105,
+    "terrainPower": 10
+  },
+  "unarmed": {
+    "name": "Bare Knuckles",
+    "kind": "melee",
+    "slot": "melee",
+    "damage": 10,
+    "magazine": 0,
+    "reserve": 0,
+    "cooldownTicks": 0,
+    "reloadTicks": 0,
+    "range": 48,
+    "pellets": 0,
+    "spread": 0,
+    "recoil": 0,
+    "terrainPower": 25
+  }
 }

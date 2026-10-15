@@ -2,11 +2,11 @@ export type WeaponSlot = 'primary'|'sidearm'|'melee';
 export interface CombatState {
   primary: string; sidearm: string; melee: string; throwable: string; equipped: WeaponSlot;
   ammo: Record<string,number>; reserve: Record<string,number>; cooldown: number; reloadTicks: number;
-  meleeStage: number; comboWindow: number; hitTargets: number[]; attackHeld: boolean;
+  meleeStage: number; comboWindow: number; hitTargets: number[]; hitProps: number[]; hitTiles: string[]; attackHeld: boolean; shootHeld: boolean;
   throwHeld: boolean; interactHeld: boolean; switchHeld: boolean;
   attackBufferTicks: number; grabTicks: number;
   throwableCount: number; cookTicks: number; specialMeter: number; stunTicks: number; blockMeter: number;
-  aimX: number; aimY: number; pendingAttack: string; grabTarget: number|null;
+  aimX: number; aimY: number; pendingAttack: string; grabTarget: number|null; heldProp: number|null;
   lastHitBy: number; lastHitTick: number; kills: number; deaths: number; damageDealt: number; shots: number; hits: number;
 }
 export interface Projectile {

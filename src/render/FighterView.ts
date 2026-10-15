@@ -63,6 +63,7 @@ export class FighterView {
       frontHandX = combat.aimX * fighter.facing * 15; frontHandY = combat.aimY * 15 - 3;
     }
     if (combat?.cookTicks > 0) { frontHandX = -7; frontHandY = -21; }
+    if (combat && combat.heldProp !== null) { frontHandX = 22; frontHandY = -5; }
     g.lineStyle(6, fighter.color).lineBetween(7, -5 + offset, frontHandX, frontHandY);
     g.fillStyle(0xf2c59c).fillRect(frontHandX - 3, frontHandY - 2, 6, 5);
     g.fillStyle(0x162029).fillRoundedRect(-8, head - 8, 18, 16, 3);
@@ -87,7 +88,7 @@ export class FighterView {
   private drawWeapon(fighter: Fighter, hidden: boolean): void {
     const g = this.weaponArt; g.clear();
     const combat = fighter.combat;
-    if (!combat || hidden) return;
+    if (!combat || hidden || combat.heldProp !== null) return;
     if (combat.cookTicks > 0) {
       g.setPosition(fighter.x - fighter.facing * 7, fighter.y - 24).setRotation(0).setScale(1);
       g.fillStyle(0x263d3b).fillCircle(0, 0, 5);

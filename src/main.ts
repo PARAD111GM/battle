@@ -8,7 +8,7 @@ import './ui/styles.css';
 
 const world = new World(getArena(), 713);
 world.addFighter({name:'RIVET',color:0xffb74d});
-world.addFighter({name:'FLUX',color:0x68e2df,x:500,y:872,facing:-1});
+world.addFighter({name:'FLUX',color:0x68e2df,x:550,y:872,facing:-1});
 const input = new InputManager(document.getElementById('game')!);
 const hud = new Hud(document.getElementById('hud')!);
 const scene: ArenaScene = new ArenaScene(world,()=>{
@@ -20,7 +20,7 @@ const scene: ArenaScene = new ArenaScene(world,()=>{
 });
 scene.onTick=()=>{for(const event of world.events)hud.event(event,world);hud.update(world);};
 const game=new Phaser.Game({type:Phaser.AUTO,parent:'game',backgroundColor:'#111923',pixelArt:true,antialias:false,scale:{mode:Phaser.Scale.RESIZE,width:'100%',height:'100%'},scene:[scene],audio:{noAudio:true}});
-document.getElementById('phase-label')!.textContent='COMBAT LAB';
+document.getElementById('phase-label')!.textContent='DEMOLITION LAB';
 document.querySelector('footer span')!.innerHTML='<b>A D</b> MOVE <b>SPACE</b> JUMP <b>J / RMB</b> MELEE <b>K / LMB</b> FIRE <b>G</b> GRENADE <b>L</b> BLOCK';
 document.getElementById('menu-button')!.addEventListener('click',()=>{scene.paused=!scene.paused;input.reset();(document.activeElement as HTMLElement)?.blur();document.getElementById('announcer')!.textContent=scene.paused?'PAUSED':'';});
 window.addEventListener('keydown',e=>{if(e.code==='Escape'&&!e.repeat)document.getElementById('menu-button')!.click();});

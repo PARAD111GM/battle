@@ -99,6 +99,43 @@ describe('combat simulation', () => {
     expect(attacker.combat.reserve.pistol).toBe(0);
   });
 
+  it('clears the reload action when collecting a replacement weapon so rolling remains available', () => {
+    const data = arena();
+    data.weaponSpawns = [{ x: 100, y: 581 }];
+    const world = new World(data);
+    const fighter = world.addFighter();
+    fighter.combat.ammo.pistol = 0;
+    advance(world, 1, { 0: { shoot: true } });
+    expect(fighter.combat.reloadTicks).toBeGreaterThan(0);
+    expect(fighter.action).toBe('reload');
+
+    advance(world, 1, { 0: { interact: true } });
+    expect(fighter.combat.primary).toBe('shotgun');
+    expect(fighter.combat.reloadTicks).toBe(0);
+    expect(fighter.action).not.toBe('reload');
+    advance(world, 1, { 0: { roll: true } });
+    expect(fighter.action).toBe('roll');
+  });
+
+  it('uses a fresh fire press to attack with the equipped melee weapon', () => {
+    const world = new World(arena());
+    const fighter = world.addFighter();
+    const target = world.addFighter({ x: 132, hp: 500, maxHp: 500 });
+    advance(world, 1, { 0: { switchWeapon: 4 } });
+    expect(fighter.combat.equipped).toBe('melee');
+    advance(world, 25, { 0: { shoot: true } });
+    const hpAfterSwing = target.hp;
+    expect(hpAfterSwing).toBeLessThan(target.maxHp);
+    target.x = 132; target.y = 581; target.vx = target.vy = 0;
+    advance(world, 60, { 0: { shoot: true } });
+    expect(target.hp).toBe(hpAfterSwing);
+
+    target.x = 132; target.y = 581; target.vx = target.vy = 0;
+    advance(world, 1);
+    advance(world, 25, { 0: { shoot: true } });
+    expect(target.hp).toBeLessThan(hpAfterSwing);
+  });
+
   it('hits once per melee swing and requires releasing attack before a second swing', () => {
     const world = new World(arena());
     world.addFighter();
@@ -125,6 +162,17 @@ describe('combat simulation', () => {
     advance(world, 30, { 0: { attack: true, aimX: 1 } });
     expect(behind.hp).toBe(behind.maxHp);
     expect(distant.hp).toBe(distant.maxHp);
+  });
+
+  it.each([1, 6])('keeps a melee swing from hitting through a still-solid material %i wall', material => {
+    const data = arena();
+    for (let row = 26; row < 30; row++) data.tiles[row * data.width + 6] = material;
+    const world = new World(data);
+    world.addFighter({ x: 107 });
+    const target = world.addFighter({ x: 153 });
+    advance(world, 25, { 0: { attack: true } });
+    expect(world.terrain.isSolid(6, 29)).toBe(true);
+    expect(target.hp).toBe(target.maxHp);
   });
 
   it('advances through the three-hit combo and resets after its input window expires', () => {

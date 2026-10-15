@@ -24,3 +24,9 @@ Validation: 15 Vitest tests passed, strict TypeScript and Vite production build 
 Implemented: phased unarmed combo/uppercut/divekick, guard break, grab/throw, pistol/SMG/shotgun, data-driven hitscan guns, finite magazines/reserves, automatic and interact reload, pickup switching, cooked bouncing grenades, knockback, health/KO/respawn, persistent match stats, local keyboard/gamepad adapters, and combat HUD/feedback.
 
 Validation: 37 simulation tests passed (including 22 combat cases), strict build passed, Chromium movement/fire-damage/emulated-gamepad checks passed without page errors. Fixed a double roll-timer update caught by the retained movement tests. Physical gamepads have not been connected to the cloud machine. Terrain is intentionally solid until milestone 3.
+
+### Milestone 3 — destruction v1
+
+Implemented distinct dirt/wood/concrete/metal/glass/bedrock durability; bullets, melee, and explosions damage terrain. Crates stop bullets and can contain one-shot loot; barrels chain-react exactly once. Players can lift and throw physical props; swept chunks hurt fighters and expire within a bounded pool. Tile rendering uses 32 × 32 cached chunks and material damage cracks.
+
+Validation: all 63 tests passed; production build and Chromium movement/fire-through-cover/gamepad/tile-break smoke passed without page errors. Independent review regressions fixed: pickup while reloading, melee using the normal trigger, and punches through intact walls. Collapse and fire are reserved for milestone 5.

@@ -1,0 +1,8 @@
+[
+  { "id": 1, "name": "dirt", "hp": 45, "debrisColor": 7824202, "sound": "earth", "flammable": false, "fireResistance": 1 },
+  { "id": 2, "name": "wood", "hp": 60, "debrisColor": 10779208, "sound": "wood", "flammable": true, "fireResistance": 0.15 },
+  { "id": 3, "name": "concrete", "hp": 150, "debrisColor": 6582896, "sound": "stone", "flammable": false, "fireResistance": 1 },
+  { "id": 4, "name": "metal", "hp": 280, "debrisColor": 4414819, "sound": "metal", "flammable": false, "fireResistance": 1 },
+  { "id": 5, "name": "glass", "hp": 16, "debrisColor": 8898756, "sound": "glass", "flammable": false, "fireResistance": 1 },
+  { "id": 6, "name": "bedrock", "hp": null, "debrisColor": 2701375, "sound": "stone", "flammable": false, "fireResistance": 1 }
+]

@@ -8,7 +8,10 @@ import { applyDamage } from './systems/damage';
 import { createCombatState } from './weapons/definitions';
 import { stepProjectiles } from './weapons/firearms';
 import type { Hitbox, Pickup, Projectile } from './weapons/types';
-import { TileMap } from './terrain/TileMap';
+import { TileMap, type BrokenTile } from './terrain/TileMap';
+import { createProps, damageProp, releaseHeldProp, spawnDebris, stepProps } from './entities/props';
+import type { Debris, PropBody } from './entities/types';
+import { MATERIALS } from '../data/materials';
 import { neutralInput, type ArenaData, type Fighter, type InputCommand, type SimEvent } from './types';
 
 /** Headless fixed-step simulation; the same commands and seed produce the same state. */
@@ -18,6 +21,8 @@ export class World {
   readonly rng: SeededRandom;
   readonly projectiles: Projectile[] = [];
   readonly pickups: Pickup[] = [];
+  readonly props: PropBody[];
+  readonly debris: Debris[] = [];
   hitboxes: Hitbox[] = [];
   tick = 0;
   events: SimEvent[] = [];
@@ -25,6 +30,7 @@ export class World {
   constructor(public readonly arena: ArenaData, seed = 12345) {
     this.terrain = new TileMap(arena);
     this.rng = new SeededRandom(seed);
+    this.props = createProps(arena.props);
     this.pickups = arena.weaponSpawns.map((spawn, index) => ({ id: index, x: spawn.x, y: spawn.y, kind: 'weapon', weapon: ['shotgun', 'smg', 'pistol'][index % 3], active: true, respawnTicks: 0 }));
   }
 
@@ -69,6 +75,7 @@ export class World {
     for (const fighter of this.fighters) if (fighter.alive) stepCombat(this, fighter, commands[fighter.id] ?? neutralInput());
     resolveMelee(this);
     stepProjectiles(this);
+    stepProps(this);
   }
 
   damageFighter(target: Fighter, amount: number, owner: number, knockback = 250, angle = 0, kind = 'melee'): boolean {
@@ -77,6 +84,13 @@ export class World {
 
   explode(x: number, y: number, radius: number, damage: number, owner = -1): void {
     this.events.push({ type: 'explosion', x, y, amount: radius, intensity: Math.min(1, radius / 135), weapon: 'grenade' });
+    for (const tile of this.terrain.damageCircle(x, y, radius, damage * TUNING.props.explosionTerrainMultiplier)) this.emitBrokenTile(tile, owner);
+    for (const prop of this.props) {
+      if (!prop.active || !prop.dynamic) continue;
+      const dx = Math.max(0, Math.abs(prop.x - x) - prop.width / 2), dy = Math.max(0, Math.abs(prop.y - y) - prop.height / 2);
+      const distance = Math.hypot(dx, dy);
+      if (distance <= radius) this.damageProp(prop, damage * (1 - distance / radius * 0.5), owner);
+    }
     for (const fighter of this.fighters) {
       const distance = Math.hypot(fighter.x - x, fighter.y - y);
       if (distance > radius || !fighter.alive) continue;
@@ -85,8 +99,23 @@ export class World {
     }
   }
 
+  damageTerrain(col: number, row: number, power: number, owner = -1): void {
+    const broken = this.terrain.damage(col, row, power);
+    if (broken) this.emitBrokenTile(broken, owner);
+  }
+
+  damageProp(prop: PropBody, amount: number, owner = -1): void { damageProp(this, prop, amount, owner); }
+
+  spawnDebris(x: number, y: number, material: number, owner = -1, count = 1): void { spawnDebris(this, x, y, material, owner, count); }
+
+  private emitBrokenTile(tile: BrokenTile, owner: number): void {
+    this.events.push({ type: 'tile-break', x: tile.x, y: tile.y, amount: tile.material, color: MATERIALS[tile.material]?.debrisColor ?? 0x999999 });
+    this.spawnDebris(tile.x, tile.y, tile.material, owner, TUNING.debris.piecesPerTile);
+  }
+
   knockout(fighter: Fighter, owner = -1, kind = 'knockout'): void {
     if (!fighter.alive) return;
+    releaseHeldProp(this, fighter, false);
     fighter.alive = false; fighter.hp = 0; fighter.stocks = Math.max(0, fighter.stocks - 1);
     fighter.action = 'dead'; fighter.respawnTicks = TUNING.fighter.respawnTicks;
     fighter.vx = fighter.vy = 0; fighter.climbing = false; fighter.ledge = null;

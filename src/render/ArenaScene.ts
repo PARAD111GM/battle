@@ -5,18 +5,17 @@ import type { InputCommand, SimEvent } from '../sim/types';
 import { AssetLibrary } from './AssetLibrary';
 import { FighterView } from './FighterView';
 import { CombatView } from './CombatView';
+import { TerrainView } from './TerrainView';
+import { PropsView } from './PropsView';
 
 interface Particle { active: boolean; x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: number }
-const MATERIAL_COLORS = [0, 0x77634a, 0xa47a48, 0x647270, 0x435d63, 0x87c8c4, 0x29383f];
 
 export class ArenaScene extends Phaser.Scene {
   public paused = false;
   public debug = false;
   public onTick?: () => void;
   private accumulator = 0;
-  private terrainRevision = -1;
-  private terrainArt!: Phaser.GameObjects.Graphics;
-  private terrainImage?: Phaser.GameObjects.Image;
+  public terrainView!: TerrainView;
   private effectsArt!: Phaser.GameObjects.Graphics;
   private debugArt!: Phaser.GameObjects.Graphics;
   private debugText!: Phaser.GameObjects.Text;
@@ -27,6 +26,7 @@ export class ArenaScene extends Phaser.Scene {
   private focusY = 0;
   private visualTime = 0;
   private combatView!: CombatView;
+  private propsView!: PropsView;
 
   constructor(public world: World, private readonly getCommands: () => Record<number, InputCommand>) {
     super({ key: 'ArenaScene' });
@@ -38,10 +38,11 @@ export class ArenaScene extends Phaser.Scene {
     AssetLibrary.create(this);
     this.cameras.main.setBackgroundColor('#111c26');
     this.drawBackdrop();
-    this.terrainArt = this.add.graphics().setVisible(false);
+    this.terrainView = new TerrainView(this, this.world.terrain);
     this.drawProps();
     this.effectsArt = this.add.graphics().setDepth(30);
     this.combatView = new CombatView(this, this.world);
+    this.propsView = new PropsView(this, this.world);
     this.debugArt = this.add.graphics().setDepth(45);
     this.debugText = this.add.text(16, 16, '', {
       fontFamily: 'monospace', fontSize: '12px', color: '#c8ffee', backgroundColor: '#0d1825', padding: {x:12,y:10},
@@ -58,8 +59,10 @@ export class ArenaScene extends Phaser.Scene {
       for (const view of this.views.values()) view.destroy();
       this.views.clear();
       this.combatView.destroy();
+      this.terrainView.destroy();
+      this.propsView.destroy();
     });
-    this.drawTerrain();
+    this.terrainView.update(this.cameras.main);
   }
 
   update(_time: number, delta: number): void {
@@ -84,7 +87,6 @@ export class ArenaScene extends Phaser.Scene {
       this.updateParticles(elapsed / 1000);
     } else this.accumulator = 0;
     this.combatView.update(this.visualTime, this.paused ? 0 : elapsed / 1000);
-    if (this.terrainRevision !== this.world.terrain.revision) this.drawTerrain();
     for (const fighter of this.world.fighters) {
       let view = this.views.get(fighter.id);
       if (!view) { view = new FighterView(this, fighter); this.views.set(fighter.id, view); }
@@ -94,6 +96,8 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
     this.updateCamera();
+    this.terrainView.update(this.cameras.main);
+    this.propsView.update(this.visualTime,this.debug);
     this.drawDebug();
   }
 
@@ -178,49 +182,6 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private drawTerrain(): void {
-    const map = this.world.terrain; const size = map.tileSize; const g = this.terrainArt;
-    g.clear();
-    for (let row = 0; row < map.height; row++) for (let col = 0; col < map.width; col++) {
-      const material = map.get(col, row); if (!material) continue;
-      const x = col * size; const y = row * size; const color = MATERIAL_COLORS[material] ?? 0x647270;
-      const hash = (col * 73 + row * 37) % 11;
-      g.fillStyle(color).fillRect(x, y, size, size);
-      g.fillStyle(hash < 5 ? 0xffffff : 0x000000, 0.015 + hash * 0.004).fillRect(x, y, size, size);
-      const top = map.get(col, row - 1) === 0;
-      if (top) {
-        g.fillStyle(material === 2 ? 0xdbb16d : material === 4 ? 0x8ca69e : 0x91a093).fillRect(x, y, size, 3);
-        g.fillStyle(0x080f16, 0.5).fillRect(x, y + size - 4, size, 4);
-        if (material === 4) {
-          g.fillStyle(col % 2 ? 0xdbad62 : 0x273b40).fillRect(x, y + 4, size, 4);
-          g.fillStyle(0x1b3139).fillTriangle(x + 4, y + 9, x + size - 4, y + 9, x + size - 4, y + size - 5);
-          g.fillStyle(0xa2b7a8).fillRect(x + 2, y + size - 7, 2, 2);
-        }
-      }
-      if (material === 2) {
-        g.lineStyle(1, 0x574a35, 0.6).lineBetween(x, y + 10, x + size, y + 10).lineBetween(x + size - 1, y + 3, x + size - 1, y + size);
-        g.fillStyle(0x503e2e).fillRect(x + 3, y + 4, 2, 2).fillRect(x + size - 5, y + 4, 2, 2);
-      } else if (material === 3 && (col + row) % 3 === 0) {
-        g.fillStyle(0x283d42, 0.4).fillRect(x + 6, y + 11, 4, 2).fillRect(x + 16, y + 6, 2, 2);
-      } else if (material === 5) {
-        g.lineStyle(1, 0xc3ffeb, 0.8).lineBetween(x + 3, y + 12, x + 12, y + 3);
-        g.lineStyle(1, 0x25484b).strokeRect(x, y, size, size);
-      } else if (material === 6) {
-        g.lineStyle(1, 0x1e2b32).lineBetween(x, y + size - 1, x + size, y + size - 1);
-      }
-      if (!map.get(col - 1, row)) g.fillStyle(0xa9c1af, 0.2).fillRect(x, y + 3, 2, size - 3);
-      if (!map.get(col + 1, row)) g.fillStyle(0x07121b, 0.35).fillRect(x + size - 2, y, 2, size);
-    }
-    // Static graphics are baked once; normal frames submit one terrain quad.
-    // Destruction's chunk renderer can use this same drawing boundary later.
-    const key = 'rivet-terrain';
-    if (this.textures.exists(key)) this.textures.remove(key);
-    g.generateTexture(key, map.width * size, map.height * size);
-    if (this.terrainImage) this.terrainImage.setTexture(key);
-    else this.terrainImage = this.add.image(0, 0, key).setOrigin(0).setDepth(10);
-    this.terrainRevision = map.revision;
-  }
-
   private drawProps(): void {
     const g = this.add.graphics().setDepth(8);
     for (const prop of this.world.arena.props) {
@@ -248,6 +209,8 @@ export class ArenaScene extends Phaser.Scene {
     if (event.type === 'roll') this.emitDust(event.x, event.y + 16, 8, 0xadbaaa, 0.9);
     if (event.type === 'ledge') this.emitDust(event.x, event.y, 4, 0xc5d8b2, 0.55);
     if (event.type === 'respawn') this.emitDust(event.x, event.y, 16, 0x8ef4d1, 1.2);
+    if (event.type === 'tile-break') this.emitDust(event.x,event.y,5,event.color??0xa8ac91,1.1);
+    if (event.type === 'prop-break') this.emitDust(event.x,event.y,14,event.color??0xc49b68,1.7);
   }
 
   private emitDust(x: number, y: number, count: number, color: number, force: number): void {
@@ -282,6 +245,7 @@ export class ArenaScene extends Phaser.Scene {
     for (const prop of this.world.arena.props) if (prop.type === 'ladder' || prop.type === 'rope') g.lineStyle(1, 0x77c5e5, 0.5).strokeRect(prop.x, prop.y, prop.width, prop.height);
     for (const hitbox of this.world.hitboxes) g.lineStyle(1, 0xff705c).strokeRect(hitbox.x-hitbox.width/2,hitbox.y-hitbox.height/2,hitbox.width,hitbox.height);
     const first = this.world.fighters[0];
-    this.debugText.setText([`SIM ${this.world.tick} · ${Math.round(this.game.loop.actualFps)} FPS · 60 HZ`, `STATE ${first?.action ?? '—'} · ${first?.grounded ? 'GROUND' : 'AIR'}`,`VELOCITY ${first?.vx.toFixed(0) ?? 0}, ${first?.vy.toFixed(0) ?? 0}`,`F1  HIDE DEBUG`]);
+    const terrain=this.terrainView.stats;
+    this.debugText.setText([`SIM ${this.world.tick} · ${Math.round(this.game.loop.actualFps)} FPS · 60 HZ`, `STATE ${first?.action ?? '—'} · ${first?.grounded ? 'GROUND' : 'AIR'}`,`VELOCITY ${first?.vx.toFixed(0) ?? 0}, ${first?.vy.toFixed(0) ?? 0}`,`CHUNKS ${terrain.visible}/${terrain.total} · REBUILDS ${terrain.rebuilds}`,`F1  HIDE DEBUG`]);
   }
 }

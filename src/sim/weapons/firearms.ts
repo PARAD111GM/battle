@@ -5,9 +5,10 @@ import type { Fighter } from '../types';
 import type { World } from '../World';
 import { equippedWeapon, WEAPONS } from './definitions';
 import type { Projectile } from './types';
+import type { PropBody } from '../entities/types';
 
 /** Returns entry distance of a ray into a fighter's AABB, or Infinity. */
-function rayBody(x: number, y: number, dx: number, dy: number, fighter: Fighter): number {
+function rayBody(x: number, y: number, dx: number, dy: number, fighter: Pick<Fighter, 'x' | 'y' | 'width' | 'height'>): number {
   let near = 0, far = Infinity;
   for (const [origin, direction, min, max] of [[x, dx, fighter.x - fighter.width / 2, fighter.x + fighter.width / 2], [y, dy, fighter.y - fighter.height / 2, fighter.y + fighter.height / 2]]) {
     if (Math.abs(direction) < 1e-9) { if (origin < min || origin > max) return Infinity; continue; }
@@ -34,6 +35,12 @@ function rayTerrain(world: World, x: number, y: number, dx: number, dy: number, 
   return range;
 }
 
+export function hasLineOfSight(world: World, x: number, y: number, toX: number, toY: number): boolean {
+  const distance = Math.hypot(toX - x, toY - y);
+  if (distance < 0.01) return true;
+  return rayTerrain(world, x, y, (toX - x) / distance, (toY - y) / distance, distance) >= distance - 0.01;
+}
+
 export function startReload(world: World, fighter: Fighter): boolean {
   const id = equippedWeapon(fighter.combat), weapon = WEAPONS[id];
   if (!weapon || weapon.kind !== 'gun' || fighter.combat.reloadTicks > 0 || fighter.combat.ammo[id] >= weapon.magazine || fighter.combat.reserve[id] <= 0) return false;
@@ -56,12 +63,22 @@ export function fireGun(world: World, fighter: Fighter): void {
     const dx = Math.cos(angle), dy = Math.sin(angle);
     let distance = rayTerrain(world, originX, originY, dx, dy, weapon.range);
     let target: Fighter | undefined;
+    let propTarget: PropBody | undefined;
+    for (const prop of world.props) {
+      if (!prop.active || !prop.dynamic) continue;
+      const entry = rayBody(originX, originY, dx, dy, prop);
+      if (entry < distance) { distance = entry; propTarget = prop; }
+    }
     for (const other of world.fighters) {
       if (other === fighter || !other.alive) continue;
       const entry = rayBody(originX, originY, dx, dy, other);
-      if (entry < distance) { distance = entry; target = other; }
+      if (entry < distance) { distance = entry; target = other; propTarget = undefined; }
     }
     if (target) world.damageFighter(target, weapon.damage, fighter.id, id === 'shotgun' ? 90 : 130, angle, 'bullet');
+    else if (propTarget) { world.damageProp(propTarget, weapon.damage, fighter.id); propTarget.vx += dx * weapon.recoil; }
+    else if (distance < weapon.range) {
+      world.damageTerrain(Math.floor((originX + dx * (distance + 0.01)) / world.terrain.tileSize), Math.floor((originY + dy * (distance + 0.01)) / world.terrain.tileSize), weapon.terrainPower, fighter.id);
+    }
     world.events.push({ type: 'shot', fighterId: fighter.id, x: originX + dx * Math.min(18, distance), y: originY + dy * Math.min(18, distance), endX: originX + dx * distance, endY: originY + dy * distance, weapon: id, amount: weapon.damage });
   }
   fighter.vx -= combat.aimX * weapon.recoil;
@@ -108,7 +125,7 @@ export function stepProjectiles(world: World): void {
     if (projectile.y > world.arena.height * world.arena.tileSize + 500) projectile.active = false;
   }
   for (const pickup of world.pickups) {
-    if (!pickup.active && --pickup.respawnTicks <= 0) pickup.active = true;
+    if (!pickup.active && pickup.respawnTicks >= 0 && --pickup.respawnTicks <= 0) pickup.active = true;
   }
 }
 
@@ -122,7 +139,8 @@ export function tryPickup(world: World, fighter: Fighter): boolean {
   fighter.combat.ammo[pickup.weapon] = weapon.magazine;
   fighter.combat.reserve[pickup.weapon] = weapon.reserve;
   fighter.combat.reloadTicks = 0;
-  pickup.active = false; pickup.respawnTicks = COMBAT.pickupRespawnTicks;
+  if (fighter.action === 'reload') { fighter.action = fighter.grounded ? 'idle' : 'fall'; fighter.actionTicks = 0; }
+  pickup.active = false; pickup.respawnTicks = pickup.kind === 'loot' ? -1 : COMBAT.pickupRespawnTicks;
   world.events.push({ type: 'pickup', fighterId: fighter.id, x: pickup.x, y: pickup.y, weapon: pickup.weapon });
   return true;
 }

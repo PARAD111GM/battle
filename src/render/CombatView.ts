@@ -26,6 +26,8 @@ export class CombatView {
   }
 
   event(event: SimEvent): void {
+    if(event.type==='tile-break')this.sparks(event.x,event.y,event.amount===4?6:3,event.color??0xc8be94);
+    if(event.type==='prop-break')this.sparks(event.x,event.y,10,event.color??0xc6a26b);
     if (event.type === 'shot') {
       const dx=(event.endX??event.x)-event.x,dy=(event.endY??event.y)-event.y;
       const length=Math.hypot(dx,dy),ux=length?dx/length:1,uy=length?dy/length:0;
@@ -49,9 +51,10 @@ export class CombatView {
       this.floatText(event.x,event.y-35,'GUARD BREAK','#ffac8c');
     }
     if (event.type === 'explosion') {
-      this.effect('flash',event.x,event.y,0.24,0xffc774,65);
-      this.effect('ring',event.x,event.y,0.4,0xffb45e,GRENADE.blastRadius);
-      this.effect('ring',event.x,event.y,0.65,0x6f786a,GRENADE.blastRadius * 1.25);
+      const radius=event.amount??GRENADE.blastRadius;
+      this.effect('flash',event.x,event.y,0.24,0xffc774,radius*0.48);
+      this.effect('ring',event.x,event.y,0.4,0xffb45e,radius);
+      this.effect('ring',event.x,event.y,0.65,0x6f786a,radius * 1.25);
       this.sparks(event.x,event.y,22,0xffc477);
       this.scene.cameras.main.shake(160, 0.003);
     }

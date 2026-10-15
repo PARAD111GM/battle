@@ -26,8 +26,13 @@ try {
    await page.evaluate(()=>{Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[]});});
    combat.gamepadAdapter='passed (emulated Gamepad API)';
  }
+ let destruction=null;
+ if(await page.evaluate(()=>typeof window.__RIVETFALL__.world.damageTerrain==='function')){
+   destruction=await page.evaluate(()=>{const w=window.__RIVETFALL__.world;const before=w.terrain.get(8,30);w.damageTerrain(8,30,999,0);return {before,after:w.terrain.get(8,30),revision:w.terrain.revision};});
+   if(!(destruction.before>0&&destruction.after===0))throw Error('Tile destruction failed');
+ }
  await page.keyboard.press('F1');await page.waitForTimeout(100);
  await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/movement.png'});
  if(errors.length)throw Error(errors.join('\n'));
- console.log(JSON.stringify({browser:'Chromium',movement:'passed',before,after,combat,pageErrors:errors},null,2));
+ console.log(JSON.stringify({browser:'Chromium',movement:'passed',before,after,combat,destruction,pageErrors:errors},null,2));
 } finally {await browser.close();}

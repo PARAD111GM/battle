@@ -61,3 +61,7 @@ See [DECISIONS.md](DECISIONS.md) for scope choices and milestone evidence.
 | Special (later milestone) | Q | Semicolon | Y / Triangle |
 
 Player 2 uses the first connected gamepad, or the split keyboard if no pad is connected. Press a pad button to make it visible to the browser. Gamepad adapter tests use an emulated standard Gamepad API; physical controllers require device testing. Releasing jump early makes a short hop. Up + melee uppercuts; down + melee in the air dive-kicks. Tap melee in sequence for a three-hit combo. Interact near an enemy grabs them; melee throws the grabbed fighter. Bullets bypass block. Empty magazines reload automatically when firing.
+
+## Destruction playground
+
+Wood, dirt, concrete, metal, and glass have distinct durability; bedrock is permanent. Shoot panels, swing at nearby tiles, or use grenades to open routes. Crates provide cover and may drop weapons. Barrels chain-react, so keep your distance. E lifts a nearby crate or barrel; attack/throw launches it. Broken tiles produce a bounded pool of physical chunks that can hurt fighters.
