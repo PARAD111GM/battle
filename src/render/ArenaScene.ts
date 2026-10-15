@@ -7,12 +7,14 @@ import { FighterView } from './FighterView';
 import { CombatView } from './CombatView';
 import { TerrainView } from './TerrainView';
 import { PropsView } from './PropsView';
+import { BotDebugView } from './BotDebugView';
 
 interface Particle { active: boolean; x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: number }
 
 export class ArenaScene extends Phaser.Scene {
   public paused = false;
   public debug = false;
+  public navDebug = false;
   public onTick?: () => void;
   private accumulator = 0;
   public terrainView!: TerrainView;
@@ -27,6 +29,7 @@ export class ArenaScene extends Phaser.Scene {
   private visualTime = 0;
   private combatView!: CombatView;
   private propsView!: PropsView;
+  private botDebugView!: BotDebugView;
 
   constructor(public world: World, private readonly getCommands: () => Record<number, InputCommand>) {
     super({ key: 'ArenaScene' });
@@ -43,6 +46,7 @@ export class ArenaScene extends Phaser.Scene {
     this.effectsArt = this.add.graphics().setDepth(30);
     this.combatView = new CombatView(this, this.world);
     this.propsView = new PropsView(this, this.world);
+    this.botDebugView = new BotDebugView(this,this.world);
     this.debugArt = this.add.graphics().setDepth(45);
     this.debugText = this.add.text(16, 16, '', {
       fontFamily: 'monospace', fontSize: '12px', color: '#c8ffee', backgroundColor: '#0d1825', padding: {x:12,y:10},
@@ -51,16 +55,20 @@ export class ArenaScene extends Phaser.Scene {
     this.focusX = first?.x ?? 600; this.focusY = (first?.y ?? 500) - 120;
     this.cameras.main.setZoom(this.cameraZoom()).centerOn(this.focusX, this.focusY);
     const onF1 = (event: KeyboardEvent) => { event.preventDefault(); this.debug = !this.debug; };
+    const onF2 = (event: KeyboardEvent) => { event.preventDefault(); this.navDebug = !this.navDebug; };
     this.input.keyboard?.on('keydown-F1', onF1);
+    this.input.keyboard?.on('keydown-F2', onF2);
     this.scale.on('resize', this.onResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard?.off('keydown-F1', onF1);
+      this.input.keyboard?.off('keydown-F2', onF2);
       this.scale.off('resize', this.onResize, this);
       for (const view of this.views.values()) view.destroy();
       this.views.clear();
       this.combatView.destroy();
       this.terrainView.destroy();
       this.propsView.destroy();
+      this.botDebugView.destroy();
     });
     this.terrainView.update(this.cameras.main);
   }
@@ -98,6 +106,7 @@ export class ArenaScene extends Phaser.Scene {
     this.updateCamera();
     this.terrainView.update(this.cameras.main);
     this.propsView.update(this.visualTime,this.debug);
+    this.botDebugView.update(this.navDebug);
     this.drawDebug();
   }
 

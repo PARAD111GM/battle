@@ -9,8 +9,16 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:browser": "node scripts/browser-smoke.mjs"
+    "test:browser": "node scripts/browser-smoke.mjs",
+    "bundle:standalone": "npm run build && node scripts/standalone.mjs"
   },
-  "dependencies": {"phaser": "^3.90.0"},
-  "devDependencies": {"@playwright/test": "^1.56.0", "typescript": "^5.9.3", "vite": "^7.1.10", "vitest": "^3.2.4"}
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.10",
+    "vitest": "^3.2.4"
+  }
 }

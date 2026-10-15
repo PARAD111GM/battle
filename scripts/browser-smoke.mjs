@@ -4,7 +4,7 @@ const browser = await chromium.launch({executablePath:process.env.CHROMIUM_PATH 
 try {
  const page=await browser.newPage({viewport:{width:1440,height:900}});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173');
+ await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173/?lab');
  await page.waitForFunction(()=>window.__RIVETFALL__?.world.tick>3);
  const before=await page.evaluate(()=>({x:window.__RIVETFALL__.world.fighters[0].x,tick:window.__RIVETFALL__.world.tick}));
  await page.keyboard.down('d');await page.waitForFunction(x=>window.__RIVETFALL__.world.fighters[0].x>x+40,before.x);await page.keyboard.up('d');

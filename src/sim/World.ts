@@ -12,6 +12,8 @@ import { TileMap, type BrokenTile } from './terrain/TileMap';
 import { createProps, damageProp, releaseHeldProp, spawnDebris, stepProps } from './entities/props';
 import type { Debris, PropBody } from './entities/types';
 import { MATERIALS } from '../data/materials';
+import { NavigationGraph } from './ai/NavigationGraph';
+import { BotController } from './ai/BotController';
 import { neutralInput, type ArenaData, type Fighter, type InputCommand, type SimEvent } from './types';
 
 /** Headless fixed-step simulation; the same commands and seed produce the same state. */
@@ -23,11 +25,13 @@ export class World {
   readonly pickups: Pickup[] = [];
   readonly props: PropBody[];
   readonly debris: Debris[] = [];
+  navigation: NavigationGraph | null = null;
+  readonly bots = new Map<number, BotController>();
   hitboxes: Hitbox[] = [];
   tick = 0;
   events: SimEvent[] = [];
 
-  constructor(public readonly arena: ArenaData, seed = 12345) {
+  constructor(public readonly arena: ArenaData, private readonly seed = 12345) {
     this.terrain = new TileMap(arena);
     this.rng = new SeededRandom(seed);
     this.props = createProps(arena.props);
@@ -53,6 +57,10 @@ export class World {
     };
     fighter.grounded = hasGroundSupport(fighter, this.terrain);
     this.fighters.push(fighter);
+    if (fighter.controller === 'bot') {
+      if (!this.navigation) { this.navigation = new NavigationGraph(this.terrain, this.arena.props); this.terrain.changedTiles.clear(); }
+      this.bots.set(fighter.id, new BotController((this.seed ^ Math.imul(fighter.id + 1, 2654435761)) >>> 0));
+    }
     return fighter;
   }
 
@@ -60,19 +68,29 @@ export class World {
     this.events = [];
     this.hitboxes = [];
     this.tick++;
+    if (this.navigation && this.tick % TUNING.ai.repairTicks === 0 && this.terrain.changedTiles.size > 0) {
+      this.navigation.repair(this.terrain.changedTiles.values());
+      this.terrain.changedTiles.clear();
+    }
+    const tickCommands = { ...commands };
+    for (const fighter of this.fighters) {
+      if (fighter.controller !== 'bot' || !fighter.alive || tickCommands[fighter.id]) continue;
+      const bot = this.bots.get(fighter.id);
+      if (bot) tickCommands[fighter.id] = bot.command(this, fighter);
+    }
     for (const fighter of this.fighters) {
       if (!fighter.alive) {
         fighter.respawnTicks = Math.max(0, fighter.respawnTicks - 1);
         if (fighter.respawnTicks === 0) this.respawn(fighter);
         continue;
       }
-      stepMovement(fighter, commands[fighter.id] ?? neutralInput(), this.terrain, this.arena.props, this.events);
+      stepMovement(fighter, tickCommands[fighter.id] ?? neutralInput(), this.terrain, this.arena.props, this.events);
       if (fighter.y - fighter.height / 2 > this.arena.height * this.arena.tileSize + 160) {
         const owner = this.tick - fighter.combat.lastHitTick <= COMBAT.killCreditTicks ? fighter.combat.lastHitBy : -1;
         this.knockout(fighter, owner, 'ringout');
       }
     }
-    for (const fighter of this.fighters) if (fighter.alive) stepCombat(this, fighter, commands[fighter.id] ?? neutralInput());
+    for (const fighter of this.fighters) if (fighter.alive) stepCombat(this, fighter, tickCommands[fighter.id] ?? neutralInput());
     resolveMelee(this);
     stepProjectiles(this);
     stepProps(this);

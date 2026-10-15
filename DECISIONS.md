@@ -30,3 +30,9 @@ Validation: 37 simulation tests passed (including 22 combat cases), strict build
 Implemented distinct dirt/wood/concrete/metal/glass/bedrock durability; bullets, melee, and explosions damage terrain. Crates stop bullets and can contain one-shot loot; barrels chain-react exactly once. Players can lift and throw physical props; swept chunks hurt fighters and expire within a bounded pool. Tile rendering uses 32 × 32 cached chunks and material damage cracks.
 
 Validation: all 63 tests passed; production build and Chromium movement/fire-through-cover/gamepad/tile-break smoke passed without page errors. Independent review regressions fixed: pickup while reloading, melee using the normal trigger, and punches through intact walls. Collapse and fire are reserved for milestone 5.
+
+### Milestone 4 — navigation and Normal bots
+
+Implemented deterministic A*, physical walk/jump/drop/ledge/ladder/rope navigation, local terrain repair, bounded line-of-sight perception, weapon seeking, patrol/attack/cover/flee/hazard decisions, aim error, grenade use, and shared-command bot control. Default sandbox is one human versus three bots. F2 displays graph/path/goal/target data. Extended the central catwalk four tiles after physical route validation found an unreachable gap.
+
+Validation: all 88 tests passed. All Warehouse spawn pairs have routes; all six pickup routes succeeded in108–216ticks. A1human/3bot1000tick diagnostic had all bots moving/firing with no persistent stall (~178ms headless total). Browser checks passed for three bots and F2 with no page errors. Fixed a ladder-top replanning oscillation using an actual climb-route regression. Added optional standalone HTML packaging; the bundled game booted with all external requests blocked.

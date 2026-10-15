@@ -65,3 +65,7 @@ Player 2 uses the first connected gamepad, or the split keyboard if no pad is co
 ## Destruction playground
 
 Wood, dirt, concrete, metal, and glass have distinct durability; bedrock is permanent. Shoot panels, swing at nearby tiles, or use grenades to open routes. Crates provide cover and may drop weapons. Barrels chain-react, so keep your distance. E lifts a nearby crate or barrel; attack/throw launches it. Broken tiles produce a bounded pool of physical chunks that can hurt fighters.
+
+## Bots
+
+The default Ironworks sandbox is one keyboard/mouse human versus three Normal bots. Bots produce the same `InputCommand` as human controllers. F2 draws navigation edges, paths, target links, and goals. The navigation graph repairs changed terrain locally. Add `?lab` to the development address for the two-human test sandbox.
