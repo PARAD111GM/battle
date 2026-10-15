@@ -1,0 +1,20 @@
+# Rivetfall — implementation decisions
+
+- Build the six required milestones in order, with a tested, playable commit at each boundary. Online multiplayer is optional milestone 7 and is deferred until the local game is complete.
+- Original identity: **Rivetfall**, an industrial arena brawler. Art is generated from shapes and pixel textures; no external characters, audio, fonts, or art are used.
+- Simulation uses center-positioned fighter AABBs, top-left prop rectangles, pixels and seconds, and exactly 60 ticks per second. Phaser has no physics authority.
+- The brief's references to numbered Sections 4/5 do not correspond to headings in the supplied text. The listed movement and combat features are the source of truth.
+- Milestone 1 provides running, jump buffering, coyote time, short hops, fast fall, dodge rolls, ladder/rope climbs, and ledge hangs/climbs. No double jump or wall jump is added because neither was requested.
+- Tile size is 24 pixels. Arena dimensions vary by layout; all exceed a single typical viewport. Warehouse sandbox is 112 × 44 tiles.
+- Use local keyboard/mouse first, then gamepads and optional split keyboard. Gamepad mappings follow the standard browser Gamepad API.
+- Cloud tasks already provide isolation. Work in the existing `/workspace/battle` checkout; do not create worktrees unless requested.
+
+## Milestone log
+
+Validation evidence is recorded when each milestone is completed.
+
+### Milestone 1 — movement sandbox
+
+Implemented and validated: fixed-step headless simulation, swept AABB terrain collision, responsive locomotion, roll immunity, coyote/buffer/variable jumps, fast fall, ladder/rope climbs, ledge hangs/climbs/drops, original procedural factory art, follow camera, F1 collision display, and pause.
+
+Validation: 15 Vitest tests passed, strict TypeScript and Vite production build passed, Chromium input smoke passed with no page errors. Actual authored climb routes are tested. Software-rendered headless browser timing is unsuitable for a hardware FPS claim; smoke checks wait for simulation progress. Try A/D, Space tap/hold, Shift, and W/S at ladders. Combat is deliberately absent at this checkpoint.
