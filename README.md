@@ -2,27 +2,67 @@
 
 An original browser arena brawler: four fighters, four destructible arenas, six guns, four melee weapons, five throwables, four specials, and up to eight local players/bots. Strict TypeScript, Phaser 3 rendering, and a separate deterministic 60 Hz simulation. Art and sound use no external assets.
 
-## Run
+## Install and run on your computer
 
-Requires Node.js 22.12+ (validated on Node 24).
+You need [Node.js](https://nodejs.org/) 22.12 or newer, including npm; **Node.js 24 is recommended and tested**. Use a modern desktop browser. The first dependency installation needs an internet connection. You do not need API keys, a database, or a separate game server.
+
+If Git is installed, open Terminal, PowerShell, or Command Prompt and run:
 
 ```sh
-cd /workspace/battle
-npm ci --cache /workspace/.cache/npm
+git clone https://github.com/PARAD111GM/battle.git
+cd battle
+npm ci
 npm run dev
 ```
 
-On your own computer, extract the source archive, open its folder in a terminal, and run `npm ci` then `npm run dev`. Open the address printed by Vite. The server binds port 5173 on all interfaces. In a cloud workspace, use the platform's forwarded-port browser view if it offers one; the cloud environment configuration screen itself is not a game preview.
+Alternatively, choose **Code → Download ZIP** on GitHub, extract the ZIP, and open a terminal in the extracted folder containing `package.json`. Run `npm ci`, then `npm run dev`.
+
+Keep the terminal open and open the address printed by Vite in your browser, normally `http://localhost:5173` on your own computer. Click **Enter the Arena → Quick Match** to play against three bots. Press **Ctrl+C** in the terminal to stop the server. After the first installation, start it again with `npm run dev` from the same folder.
+
+### Build a single file for offline play
+
+After installing dependencies, run:
 
 ```sh
-npm test
-npm run build
-npm run preview
-npm run test:browser
 npm run bundle:standalone
 ```
 
-Browser checks expect a running development server and Chromium at `/usr/bin/chromium`; override `TEST_URL` and `CHROMIUM_PATH` if needed. Standalone packaging creates `dist/rivetfall.html`, with its JavaScript and CSS embedded for offline use.
+This creates **`dist/rivetfall.html`** with the game engine, JavaScript, styles, and procedural assets embedded. Open that file in a desktop browser, or copy it to another computer. Once generated, it needs no Node.js installation, running server, or internet connection. Click or press a key in the game to enable browser audio.
+
+Generated builds and `node_modules` are not committed to GitHub; the repository contains the source, lockfile, tests, build scripts, and validation reports needed to recreate them.
+
+### Preview a production build
+
+```sh
+npm run build
+npm run preview
+```
+
+Open the preview address printed in the terminal, normally port **4173**. This serves the standard `dist/` build. Use `dist/rivetfall.html` from the standalone command if you want a file you can open directly.
+
+### Run in the Codex cloud environment
+
+The full project path is **`/workspace/battle`**. To install, build, test, and create the standalone file:
+
+```sh
+cd /workspace/battle
+npm run cloud:install
+npm run cloud:start
+```
+
+If setup has already completed, only `npm run cloud:start` is needed. It starts or reuses the server on port **5173**, bound to all interfaces. Use the workspace's forwarded-port browser view if available. The cloud environment configuration screen itself is not a game preview, and your own computer's localhost address does not point to the cloud machine.
+
+Cloud scripts are specific to the Linux workspace path above and require Bash, curl, and ripgrep. For your own computer, use the ordinary `npm ci` and `npm run dev` commands instead.
+
+### Common setup problems
+
+- **`node` or `npm` is not recognized:** install Node.js, reopen the terminal, and check `node --version` and `npm --version`.
+- **`package.json` cannot be found:** change into the extracted or cloned `battle` folder before running npm commands.
+- **Port 5173 is busy:** use the alternative address printed by Vite, or run `npm run dev -- --port 5174`. The cloud startup script deliberately requires port 5173.
+- **The page stops working when the terminal closes:** keep `npm run dev` running, or generate and open the standalone HTML.
+- **No sound:** click inside the game and check the master, SFX, and music settings.
+
+Browser automation is optional for playing the game. It expects a running development server and a separately installed Chromium executable at `/usr/bin/chromium`; override `TEST_URL` and `CHROMIUM_PATH` if needed. `npm ci` installs the test libraries, but does not install Chromium.
 
 ## Play
 
