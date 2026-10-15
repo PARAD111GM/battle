@@ -219,7 +219,24 @@ describe('navigation progress and recovery', () => {
     expect(controller.debug.targetId).toBe(null);
   });
 
-  it('repairs and backs away after ten real seconds without movement and never teleports', () => {
+  it('recognizes repeated pacing inside a small crater as stalled route progress', () => {
+    const world = new World(floor(), 81);
+    world.pickups.push({ id: 0, kind: 'weapon', weapon: 'smg', x: 700, y: 581, active: true, respawnTicks: 0 });
+    const bot = world.addFighter({ controller: 'bot', x: 400, y: 581, grounded: true });
+    const controller = world.bots.get(bot.id)!;
+    let recovered = -1;
+    for (let tick = 0; tick < 300; tick++) {
+      // Model an 80px confined patrol: each turn moves, but the bot never leaves the pocket.
+      bot.x = 400 + (tick % 60 < 30 ? 40 : -40);
+      commandAt(world, bot, tick);
+      if (controller.debug.goal === 'recover blocked route') { recovered = tick; break; }
+    }
+    expect(recovered).toBeGreaterThan(TUNING.ai.hardRecoveryTicks);
+    expect(recovered).toBeLessThan(300);
+    expect([360, 440]).toContain(bot.x);
+  });
+
+  it('repairs and backs away before ten seconds without movement and never teleports', () => {
     const world = new World(floor(), 81);
     world.pickups.push({ id: 0, kind: 'weapon', weapon: 'smg', x: 500, y: 581, active: true, respawnTicks: 0 });
     const bot = world.addFighter({ controller: 'bot' });
@@ -230,8 +247,8 @@ describe('navigation progress and recovery', () => {
       const command = commandAt(world, bot, tick);
       if (controller.debug.goal === 'recover blocked route') { recovered = tick; recovery = command; break; }
     }
-    expect(recovered).toBeGreaterThan(600);
-    expect(recovered).toBeLessThan(650);
+    expect(recovered).toBeGreaterThan(TUNING.ai.hardRecoveryTicks);
+    expect(recovered).toBeLessThan(TUNING.ai.hardRecoveryTicks + 50);
     expect(world.navigation!.revision).toBeGreaterThan(revision);
     expect(recovery.moveX).toBeLessThan(0);
     expect(recovery.jump).toBe(true);

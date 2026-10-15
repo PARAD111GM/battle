@@ -16,10 +16,10 @@ export function applyDamage(world: World, target: Fighter, amount: number, owner
   }
   if (world.settings.damageMode === 'health') target.hp = Math.max(0, target.hp - amount);
   target.damage += amount;
-  target.combat.specialMeter = Math.min(100, target.combat.specialMeter + amount * 0.45);
+  target.combat.specialMeter = Math.min(100, target.combat.specialMeter + amount * COMBAT.specialGainTaken);
   target.combat.lastHitBy = owner;
   target.combat.lastHitTick = world.tick;
-  target.combat.stunTicks = Math.max(target.combat.stunTicks, Math.min(35, Math.round(COMBAT.hitstunTicks + amount * 0.35)));
+  target.combat.stunTicks = Math.max(target.combat.stunTicks, Math.min(COMBAT.maxHitstunTicks, Math.round(COMBAT.hitstunTicks + amount * COMBAT.hitstunPerDamage)));
   target.combat.pendingAttack = '';
   target.combat.attackBufferTicks = 0;
   target.combat.grabTarget = null;
@@ -29,12 +29,12 @@ export function applyDamage(world: World, target: Fighter, amount: number, owner
   target.grounded = false;
   target.action = 'stunned';
   target.actionTicks = target.combat.stunTicks;
-  const force = knockback * (1 + target.damage / (world.settings.damageMode === 'percent' ? 85 : 180));
+  const force = knockback * (1 + target.damage / (world.settings.damageMode === 'percent' ? COMBAT.percentKnockbackDivisor : COMBAT.healthKnockbackDivisor));
   target.vx = Math.cos(angle) * force;
-  target.vy = Math.sin(angle) * force - 90;
+  target.vy = Math.sin(angle) * force - COMBAT.knockbackLift;
   if (source && source !== target) {
     source.combat.damageDealt += amount;
-    source.combat.specialMeter = Math.min(100, source.combat.specialMeter + amount * 0.7);
+    source.combat.specialMeter = Math.min(100, source.combat.specialMeter + amount * COMBAT.specialGainDealt);
     if (kind === 'bullet') source.combat.hits++;
   }
   world.events.push({ type: 'hit', fighterId: target.id, x: target.x, y: target.y, amount, intensity: Math.min(1, amount / 30), color: target.color });

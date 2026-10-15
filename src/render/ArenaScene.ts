@@ -10,6 +10,7 @@ import { PropsView } from './PropsView';
 import { BotDebugView } from './BotDebugView';
 import { drawBackdrop } from './Backdrop';
 import { WorldEffectsView } from './WorldEffectsView';
+import { settings } from '../input/settings';
 
 interface Particle { active: boolean; x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: number }
 
@@ -18,18 +19,26 @@ export class ArenaScene extends Phaser.Scene {
   public debug = false;
   public navDebug = false;
   public onTick?: () => void;
+  public onSimEvent?: (event: SimEvent) => void;
+  /** Replay supplies the same deterministic tick boundary as live input. */
+  public stepWorld?: () => void;
+  public hitstopMs = 0;
+  public readonly frameStats = { updateMs: 0, renderCpuMs: 0, simulationMs: 0, maxSimulationMs: 0, steps: 0, frames: 0, slowTicks: 0, hitstopEvents: 0, catchupDrops: 0, activeDust: 0 };
   private accumulator = 0;
+  private nextWarningAt = 0;
+  private shakeStrength = 0;
+  private lastDustTick = -1;
   public terrainView!: TerrainView;
   private effectsArt!: Phaser.GameObjects.Graphics;
   private debugArt!: Phaser.GameObjects.Graphics;
   private debugText!: Phaser.GameObjects.Text;
   private readonly views = new Map<number, FighterView>();
-  private readonly particles: Particle[] = Array.from({ length: 256 }, () => ({active:false,x:0,y:0,vx:0,vy:0,life:0,maxLife:0,size:0,color:0}));
+  private readonly particles: Particle[] = Array.from({ length: TUNING.visual.maxDust }, () => ({active:false,x:0,y:0,vx:0,vy:0,life:0,maxLife:0,size:0,color:0}));
   private nextParticle = 0;
   private focusX = 0;
   private focusY = 0;
   private visualTime = 0;
-  private combatView!: CombatView;
+  public combatView!: CombatView;
   private propsView!: PropsView;
   private botDebugView!: BotDebugView;
   public worldEffectsView!: WorldEffectsView;
@@ -41,7 +50,9 @@ export class ArenaScene extends Phaser.Scene {
   preload(): void { AssetLibrary.preload(this); }
 
   create(): void {
-    this.accumulator=0;this.visualTime=0;this.nextParticle=0;
+    this.accumulator=0;this.visualTime=0;this.nextParticle=0;this.hitstopMs=0;
+    this.shakeStrength=0;this.lastDustTick=-1;this.nextWarningAt=0;
+    for(const key of Object.keys(this.frameStats) as (keyof typeof this.frameStats)[])this.frameStats[key]=0;
     for(const particle of this.particles)particle.active=false;
     AssetLibrary.create(this);
     this.cameras.main.setBackgroundColor('#111c26');
@@ -81,24 +92,48 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    const elapsed = Math.min(delta, 100);
+    const beganFrame = performance.now();
+    const elapsed = Math.min(delta, TUNING.performance.maxFrameDeltaMs);
+    const preferences = settings.get().effects;
+    if (!preferences.hitstop) this.hitstopMs = 0;
+    if (!preferences.screenShake) this.cameras.main.shakeEffect.reset();
+    this.shakeStrength = Math.max(0, this.shakeStrength - elapsed * TUNING.visual.shakeMax / TUNING.visual.shakeMaxMs);
+    let simulationMs = 0, steps = 0;
     if (!this.paused) {
-      this.visualTime += elapsed;
-      this.accumulator += elapsed;
+      const frozenMs = Math.min(elapsed, this.hitstopMs);
+      this.hitstopMs -= frozenMs;
+      this.accumulator += elapsed - frozenMs;
       const fixedMs = 1000 / TUNING.tickRate;
-      let steps = 0;
-      while (!this.paused && this.accumulator >= fixedMs && steps < TUNING.performance.maxFrameSteps) {
+      while (!this.paused && this.hitstopMs === 0 && this.accumulator >= fixedMs && steps < TUNING.performance.maxFrameSteps) {
         const began = performance.now();
-        this.world.step(this.getCommands());
-        if (performance.now() - began > TUNING.performance.simWarningMs && this.world.tick % 120 === 0) {
-          console.warn('Simulation tick exceeded its 4 ms budget');
+        const previousTick = this.world.tick;
+        if (this.stepWorld) this.stepWorld(); else this.world.step(this.getCommands());
+        const duration = performance.now() - began;
+        simulationMs += duration;
+        this.frameStats.maxSimulationMs = Math.max(this.frameStats.maxSimulationMs, duration);
+        if (duration > TUNING.performance.simWarningMs) {
+          this.frameStats.slowTicks++;
+          if (began >= this.nextWarningAt) {
+            console.warn(`Simulation tick ${this.world.tick} took ${duration.toFixed(1)} ms (budget ${TUNING.performance.simWarningMs} ms)`);
+            this.nextWarningAt = began + TUNING.performance.warningIntervalMs;
+          }
         }
-        for (const event of this.world.events) this.visualEvent(event);
+        // A finished replay can decline to advance without replaying its last events.
+        if (this.world.tick === previousTick) { this.accumulator = 0; break; }
+        for (const event of this.world.events) {
+          this.visualEvent(event);
+          this.events.emit('simevent', event);
+          this.onSimEvent?.(event);
+        }
         this.events.emit('simtick');
         this.onTick?.();
         this.accumulator -= fixedMs; steps++;
+        // Hitstop delays the next tick; discard backlog instead of immediately catching up.
+        // Input edges remain queued by InputManager until getCommands is consumed.
+        if (this.hitstopMs > 0) { this.accumulator = 0; break; }
       }
-      if (steps === TUNING.performance.maxFrameSteps) this.accumulator = 0;
+      if (steps === TUNING.performance.maxFrameSteps && this.accumulator >= fixedMs) { this.accumulator = 0; this.frameStats.catchupDrops++; }
+      this.visualTime = this.world.tick * fixedMs;
       this.updateParticles(elapsed / 1000);
     } else this.accumulator = 0;
     this.combatView.update(this.visualTime, this.paused ? 0 : elapsed / 1000);
@@ -106,16 +141,22 @@ export class ArenaScene extends Phaser.Scene {
       let view = this.views.get(fighter.id);
       if (!view) { view = new FighterView(this, fighter); this.views.set(fighter.id, view); }
       view.update(fighter, this.visualTime);
-      if (!this.paused && fighter.grounded && fighter.action === 'run' && this.world.tick % 8 === 0 && delta > 0) {
+      if (!this.paused && this.world.tick !== this.lastDustTick && fighter.grounded && fighter.action === 'run' && this.world.tick % 8 === 0 && delta > 0) {
         this.emitDust(fighter.x - fighter.facing * 6, fighter.y + fighter.height / 2, 1, 0x8fa69b, 0.45);
       }
     }
+    this.lastDustTick = this.world.tick;
     this.updateCamera();
     this.terrainView.update(this.cameras.main);
     this.propsView.update(this.visualTime,this.debug);
     this.botDebugView.update(this.navDebug);
     this.worldEffectsView.update(this.visualTime);
     this.drawDebug();
+    this.frameStats.simulationMs = simulationMs;
+    this.frameStats.steps = steps;
+    this.frameStats.frames++;
+    this.frameStats.updateMs = performance.now() - beganFrame;
+    this.frameStats.renderCpuMs = this.frameStats.updateMs - simulationMs;
   }
 
   private onResize(): void { this.updateCamera(true); }
@@ -150,6 +191,8 @@ export class ArenaScene extends Phaser.Scene {
 
   private visualEvent(event: SimEvent): void {
     this.combatView.event(event);
+    this.impact(event);
+    if (!this.onScreen(event.x,event.y,100)) return;
     if (event.type === 'land') this.emitDust(event.x, event.y, 10, 0xb4baa0, Math.min(1.5, event.intensity ?? 1));
     if (event.type === 'jump') this.emitDust(event.x, event.y + 18, 6, 0xb5b49b, 0.7);
     if (event.type === 'roll') this.emitDust(event.x, event.y + 16, 8, 0xadbaaa, 0.9);
@@ -157,6 +200,36 @@ export class ArenaScene extends Phaser.Scene {
     if (event.type === 'respawn') this.emitDust(event.x, event.y, 16, 0x8ef4d1, 1.2);
     if (event.type === 'tile-break') this.emitDust(event.x,event.y,5,event.color??0xa8ac91,1.1);
     if (event.type === 'prop-break') this.emitDust(event.x,event.y,14,event.color??0xc49b68,1.7);
+  }
+
+  private onScreen(x: number, y: number, margin: number): boolean {
+    const view=this.cameras.main.worldView;
+    return x>=view.left-margin && x<=view.right+margin && y>=view.top-margin && y<=view.bottom+margin;
+  }
+
+  private impact(event: SimEvent): void {
+    const visual=TUNING.visual;
+    let frames=0, strength=0;
+    if(event.type==='hit') {
+      strength=Phaser.Math.Clamp((event.amount??0)/65,0,1);
+      if((event.amount??0)>=visual.hitstopDamageThreshold) frames=Phaser.Math.Clamp(visual.hitstopMinFrames+Math.round(((event.amount??0)-visual.hitstopDamageThreshold)/visual.hitstopDamageStep),visual.hitstopMinFrames,visual.hitstopMaxFrames);
+    } else if(event.type==='guard-break') {frames=4;strength=0.45;}
+    else if(event.type==='knockout') {frames=6;strength=0.8;}
+    else if(event.type==='slam') {frames=5;strength=1;}
+    else if(event.type==='explosion') {frames=3;strength=Phaser.Math.Clamp((event.amount??135)/190,0.25,1);}
+    if(!strength || !this.onScreen(event.x,event.y,event.type==='explosion'?(event.amount??135):70))return;
+    const preferences=settings.get().effects;
+    if(preferences.hitstop && frames>0) {
+      const duration=frames*1000/TUNING.tickRate;
+      if(duration>this.hitstopMs) {this.hitstopMs=duration;this.frameStats.hitstopEvents++;}
+    }
+    if(preferences.screenShake) {
+      const intensity=Phaser.Math.Linear(visual.shakeMin,visual.shakeMax,strength);
+      if(intensity>=this.shakeStrength) {
+        this.shakeStrength=intensity;
+        this.cameras.main.shake(Phaser.Math.Linear(visual.shakeMinMs,visual.shakeMaxMs,strength),intensity,true);
+      }
+    }
   }
 
   private emitDust(x: number, y: number, count: number, color: number, force: number): void {
@@ -168,20 +241,26 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateParticles(dt: number): void {
     const g = this.effectsArt; g.clear();
+    let active=0;
     for (const particle of this.particles) {
       if (!particle.active) continue;
       particle.life -= dt;
       if (particle.life <= 0) {particle.active = false;continue;}
       particle.x += particle.vx * dt; particle.y += particle.vy * dt; particle.vy += 120 * dt;
+      active++;
+      if(!this.onScreen(particle.x,particle.y,20))continue;
       g.fillStyle(particle.color, particle.life / particle.maxLife * 0.6).fillRect(Math.round(particle.x), Math.round(particle.y), particle.size, particle.size);
     }
+    this.frameStats.activeDust=active;
   }
 
   private drawDebug(): void {
     const g = this.debugArt; g.clear(); this.debugText.setVisible(this.debug);
     if (!this.debug) return;
     const camera = this.cameras.main;
-    this.debugText.setScale(1 / camera.zoom).setPosition(camera.worldView.right - 28 / camera.zoom, camera.worldView.top + 180 / camera.zoom);
+    const screenRight=this.world.fighters.length>4?Math.min(this.scale.width/2-80,560):this.scale.width-28;
+    const screenTop=this.world.fighters.length>4?24:180;
+    this.debugText.setScale(1 / camera.zoom).setPosition(camera.worldView.left + screenRight / camera.zoom, camera.worldView.top + screenTop / camera.zoom);
     for (const fighter of this.world.fighters) {
       if (!fighter.alive) continue;
       g.lineStyle(1, 0x8bffbe).strokeRect(fighter.x - fighter.width / 2, fighter.y - fighter.height / 2, fighter.width, fighter.height);
@@ -191,6 +270,7 @@ export class ArenaScene extends Phaser.Scene {
     for (const hitbox of this.world.hitboxes) g.lineStyle(1, 0xff705c).strokeRect(hitbox.x-hitbox.width/2,hitbox.y-hitbox.height/2,hitbox.width,hitbox.height);
     const first = this.world.fighters[0];
     const terrain=this.terrainView.stats;
-    this.debugText.setText([`SIM ${this.world.tick} · ${Math.round(this.game.loop.actualFps)} FPS · 60 HZ`, `STATE ${first?.action ?? '—'} · ${first?.grounded ? 'GROUND' : 'AIR'}`,`VELOCITY ${first?.vx.toFixed(0) ?? 0}, ${first?.vy.toFixed(0) ?? 0}`,`CHUNKS ${terrain.visible}/${terrain.total} · REBUILDS ${terrain.rebuilds}`,`F1  HIDE DEBUG`]);
+    const stats=this.frameStats,pools=this.combatView.stats;
+    this.debugText.setText([`SIM ${this.world.tick} · ${Math.round(this.game.loop.actualFps)} FPS · 60 HZ`, `STATE ${first?.action ?? '—'} · ${first?.grounded ? 'GROUND' : 'AIR'}`,`VELOCITY ${first?.vx.toFixed(0) ?? 0}, ${first?.vy.toFixed(0) ?? 0}`,`CPU RENDER ${stats.renderCpuMs.toFixed(1)} MS · SIM ${stats.simulationMs.toFixed(1)} MS`, `HITSTOP ${Math.ceil(this.hitstopMs)} MS · SLOW TICKS ${stats.slowTicks}`,`FX ${pools.effects} · CASINGS ${pools.casings} · DUST ${stats.activeDust}`,`CHUNKS ${terrain.visible}/${terrain.total} · REBUILDS ${terrain.rebuilds}`,`F1  HIDE DEBUG`]);
   }
 }

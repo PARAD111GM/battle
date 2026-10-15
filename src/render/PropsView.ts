@@ -95,12 +95,12 @@ export class PropsView {
       const color=MATERIALS[body.material]?.debrisColor??0xa6b5a4;
       const alpha=Math.min(1,body.life/40);
       const cosine=Math.cos(body.rotation),sine=Math.sin(body.rotation),hw=body.width/2,hh=body.height/2;
-      const point=(x:number,y:number)=>({x:body.x+x*cosine-y*sine,y:body.y+x*sine+y*cosine});
-      const a=point(-hw,-hh),b=point(hw,-hh),c=point(hw,hh),e=point(-hw,hh);
-      d.fillStyle(color,alpha).beginPath().moveTo(a.x,a.y).lineTo(b.x,b.y).lineTo(c.x,c.y);
-      if(body.material!==5)d.lineTo(e.x,e.y);
+      const cx=hw*cosine,sy=hh*sine,sx=hw*sine,cy=hh*cosine;
+      const ax=body.x-cx+sy,ay=body.y-sx-cy,bx=body.x+cx+sy,by=body.y+sx-cy;
+      d.fillStyle(color,alpha).beginPath().moveTo(ax,ay).lineTo(bx,by).lineTo(body.x+cx-sy,body.y+sx+cy);
+      if(body.material!==5)d.lineTo(body.x-cx-sy,body.y-sx+cy);
       d.closePath().fillPath();
-      d.lineStyle(1,0xefffe2,0.25*alpha).lineBetween(a.x,a.y,b.x,b.y);
+      d.lineStyle(1,0xefffe2,0.25*alpha).lineBetween(ax,ay,bx,by);
       if(debug)d.lineStyle(1,0xd0a7ff,0.7).strokeRect(body.x-hw,body.y-hh,body.width,body.height);
     }
   }

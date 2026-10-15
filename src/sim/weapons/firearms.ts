@@ -117,6 +117,7 @@ export function fireGun(world: World, fighter: Fighter): void {
   fighter.action = 'shoot'; fighter.actionTicks = Math.min(8, weapon.cooldownTicks);
   const originX = fighter.x, originY = fighter.y - 7;
   const baseAngle = Math.atan2(combat.aimY, combat.aimX);
+  const hitsBefore = combat.hits;
   for (let pellet = 0; pellet < weapon.pellets; pellet++) {
     const perfectAim = fighter.special === 'bullet-time' && combat.specialTicks > 0;
     const angle = baseAngle + (perfectAim ? 0 : world.rng.range(-weapon.spread, weapon.spread) * (fighter.grounded ? 1 : 1.4));
@@ -129,6 +130,8 @@ export function fireGun(world: World, fighter: Fighter): void {
       world.events.push({ type: 'shot', fighterId: fighter.id, x: originX, y: originY, endX: originX + Math.cos(angle) * 25, endY: originY + Math.sin(angle) * 25, weapon: id });
     } else traceShot(world, fighter, id, weapon, angle);
   }
+  // Accuracy measures successful trigger pulls, including multi-pellet volleys.
+  if (weapon.fireMode !== 'projectile') combat.hits = Math.min(combat.hits, hitsBefore + 1);
   fighter.vx -= combat.aimX * weapon.recoil;
   fighter.vy -= combat.aimY * weapon.recoil;
   if (combat.ammo[id] === 0) startReload(world, fighter);
@@ -172,7 +175,9 @@ export function detonateProjectile(world: World, projectile: Projectile): void {
   projectile.active = false;
   const effect = projectile.effect ?? 'explosion';
   if (effect === 'weapon-drop') {
-    world.pickups.push({ id: world.pickups.reduce((max, item) => Math.max(max, item.id + 1), 0), x: projectile.x, y: projectile.y, kind: 'loot', weapon: projectile.weapon, active: true, respawnTicks: -1, ammo: projectile.savedAmmo, reserve: projectile.savedReserve, durability: projectile.savedDurability });
+    const reusable = world.pickups.find(item => !item.active && item.respawnTicks < 0);
+    const drop = { id: reusable?.id ?? world.pickups.reduce((max, item) => Math.max(max, item.id + 1), 0), x: projectile.x, y: projectile.y, kind: 'loot', weapon: projectile.weapon, active: true, respawnTicks: -1, ammo: projectile.savedAmmo, reserve: projectile.savedReserve, durability: projectile.savedDurability };
+    if (reusable) Object.assign(reusable, drop); else world.pickups.push(drop);
   } else if (effect === 'smoke') {
     if (world.effects.length >= 64) world.effects.shift();
     world.effects.push({ id: projectile.id, kind: 'smoke', x: projectile.x, y: projectile.y, radius: projectile.blastRadius, life: 420, owner: projectile.owner });

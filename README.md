@@ -42,7 +42,7 @@ Ironworks has warehouse catwalks and explosive cover. Skyline has rooftop gaps, 
 | Dodge roll | Left Shift | Right Shift | B / Circle |
 | Block | L | Quote | LT / L2 |
 | Pick up / grab / reload | E | Backslash | LB / L1 |
-| Cycle weapon | R; 1/2/3 select slots | Right bracket | Left stick click |
+| Cycle weapon | R; 1/2/3 select slots | Right bracket; 7/8/9 slots | Left stick click |
 | Throw held weapon | E + G | Backslash + Slash | LB + RB |
 | Pause | Escape | | |
 | Collision / bot debug | F1 / F2 | | |
@@ -81,3 +81,34 @@ Materials define durability, colors, and fire behavior. Explosions break terrain
 4. Import/register the JSON in `src/data/arenas.ts`; setup previews use the actual tile data. Run `npm test` to validate spawn clearance and navigation, and test movement/destruction in play.
 
 See [DECISIONS.md](DECISIONS.md) for milestone evidence and scope choices. Optional online multiplayer is outside the six required milestones.
+
+## Editor, settings, and replays
+
+Open **Arena Editor** from the main menu to copy a built-in arena or start a blank layout. Paint or erase tiles with a 1/3/5-cell brush, place props and spawn markers, and use undo/redo while experimenting. Moving props expose their travel distance. **Save JSON** downloads a validated arena; **Load JSON** imports one. **Test Arena** starts a match on a copy, so destruction does not alter the editable layout. Return to the editor from the test match to keep working. Imports reject oversized files, unknown materials, invalid geometry, blocked spawns, and unsafe prop values.
+
+**Settings** supports both keyboard players, mouse buttons, gamepad buttons/axes/deadzone, screen shake, hitstop, and separate master/SFX/music volume. Rebinding a used control swaps bindings. Settings use guarded localStorage; the game still works when browser storage is unavailable. Short action taps are buffered through hitstop. All audio is synthesized locally; click or press a key to unlock browser audio.
+
+Save a replay from pause or results and load it from the main menu. Replay files contain the arena, seed, initial fighters/settings, and compressed external input frames; deterministic bots make the same decisions on playback. Replays are versioned and validated, with bounded file size and duration. They are intended for the same game build; changing simulation rules can change old replay outcomes.
+
+All global movement, combat phases/hitboxes, specials, AI difficulty, world-system budgets, camera, and visual feel settings live in `src/data/tuning.ts`. Per-item weapon/throwable/material definitions remain data driven.
+
+## Validation and cloud setup
+
+```sh
+npm test                    # Headless rules, physics, AI, editor, input, audio, replay tests
+npm run soak                # 50 seeded eight-bot matches; writes test-results/soak.json
+npm run test:ui             # Full menu and match flow; server must be running
+npm run test:bots           # Default one-human/three-bot browser smoke
+npm run test:editor         # Paint, props, JSON import/export, and disposable playtest
+npm run test:input          # Rebinding, short taps, and emulated gamepad input
+npm run test:audio          # Synthesized sound, music, mute, and resource limits
+npm run test:polish         # Hitstop, effects, replay hooks, and rendering stress
+npm run test:standalone     # Build bundle first; blocks all external browser requests
+npm run cloud:start        # Starts/reuses the cloud dev server on port 5173
+```
+
+`bash scripts/cloud-install.sh` installs the lockfile dependencies, builds, runs unit tests, and packages the standalone HTML. `bash scripts/cloud-start.sh` checks the app before starting it, records its process ID in `/tmp/rivetfall-vite.pid`, and logs startup to `/tmp/rivetfall-vite.log`. Install and startup are separate so dependency setup never blocks on a development server.
+
+F1 reports render/simulation timing, pool usage, and chunk rebuilds. Simulation ticks exceeding 4 ms produce a rate-limited warning. The soak report records average, percentile, and maximum tick timing, genuine match endings, finite state, pool bounds, and an independent ten-second bot-progress monitor. Software-rendered cloud browser FPS is not a measurement of a mid-range laptop GPU; verify the 60 FPS target and physical gamepads on the playing hardware.
+
+See [VALIDATION.md](VALIDATION.md) for the release checks and measured limitations.

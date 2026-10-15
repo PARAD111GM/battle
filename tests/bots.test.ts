@@ -203,6 +203,8 @@ describe('deterministic bot controllers', () => {
     expect(navigation.revision).toBeGreaterThan(revision);
     expect(navigation.nodes.has(destroyedSupport.id)).toBe(false);
     expect(navigation.nodes.get(distant.id)).toBe(distant);
+    for (let tick = 0; tick < 600 && navigation.pendingRepairs > 0; tick++) world.step({ [bot.id]: neutralInput() });
+    expect(navigation.pendingRepairs).toBe(0);
     const repairedRevision = navigation.revision;
     for (let tick = 0; tick < 120; tick++) world.step({ [bot.id]: neutralInput() });
     expect(navigation.revision).toBe(repairedRevision);

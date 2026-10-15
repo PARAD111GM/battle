@@ -27,6 +27,7 @@ export class NavigationGraph {
   private readonly columns = new Map<number, NavNode[]>();
   private readonly reach: number;
   private readonly reachColumns: number;
+  private readonly pendingEdges = new Set<string>();
 
   constructor(private readonly map: TileMap, private props: ArenaProp[]) {
     this.reach = this.jumpDuration(map.height * map.tileSize + HEIGHT) * M.runSpeed;
@@ -61,7 +62,10 @@ export class NavigationGraph {
       for (let col = center - 2; col <= center + 2; col++) columns.add(col);
     }
     this.props = props;
-    for (const col of columns) for (const node of this.columns.get(col) ?? []) this.rebuildEdges(node);
+    for (const col of columns) for (const node of this.columns.get(col) ?? []) {
+      node.edges = node.edges.filter(edge => edge.kind !== 'climb');
+      this.pendingEdges.add(node.id);
+    }
     this.addClimbEdges(columns);
     this.revision++;
   }
@@ -71,15 +75,24 @@ export class NavigationGraph {
     return start && goal ? this.path(start.id, goal.id) : [];
   }
 
-  /** Only changed columns and traversal edges whose horizontal corridor crosses them are repaired. */
+  /** Synchronous convenience for tools/tests; gameplay advances the deterministic work queue. */
   repair(changes: Iterable<TileCoordinate>): void {
+    this.queueRepair(changes);
+    this.stepRepair(Infinity);
+  }
+
+  get pendingRepairs(): number { return this.pendingEdges.size; }
+
+  /** Update standing surfaces immediately; remove stale corridors before expensive edge rebuilding. */
+  queueRepair(changes: Iterable<TileCoordinate>): void {
     const changedColumns = new Set<number>();
+    const changedRows = new Map<number, { min: number; max: number }>();
     for (const { col, row } of changes) {
-      if (Number.isInteger(col) && Number.isInteger(row) && col >= 0 && col < this.map.width && row >= 0 && row < this.map.height) {
-        // Body clearance can straddle an adjacent column when tiles are narrower than a fighter.
-        const halo = Math.ceil(WIDTH / (2 * this.map.tileSize));
-        for (let nearby = Math.max(0, col - halo); nearby <= Math.min(this.map.width - 1, col + halo); nearby++) changedColumns.add(nearby);
-      }
+      if (!Number.isInteger(col) || !Number.isInteger(row) || col < 0 || col >= this.map.width || row < 0 || row >= this.map.height) continue;
+      const rows = changedRows.get(col);
+      changedRows.set(col, { min: Math.min(row, rows?.min ?? row), max: Math.max(row, rows?.max ?? row) });
+      const halo = Math.ceil(WIDTH / (2 * this.map.tileSize));
+      for (let nearby = Math.max(0, col - halo); nearby <= Math.min(this.map.width - 1, col + halo); nearby++) changedColumns.add(nearby);
     }
     if (!changedColumns.size) return;
     const edgeColumns = new Set<number>();
@@ -87,10 +100,44 @@ export class NavigationGraph {
       this.rebuildColumn(col);
       for (let nearby = Math.max(0, col - this.reachColumns); nearby <= Math.min(this.map.width - 1, col + this.reachColumns); nearby++) edgeColumns.add(nearby);
     }
-    for (const col of edgeColumns) for (const node of this.columns.get(col) ?? []) this.rebuildEdges(node);
-    // Ladder endpoints lie within this region. Other climb edges retain their existing references.
-    this.addClimbEdges(edgeColumns);
+    for (const col of edgeColumns) for (const node of this.columns.get(col) ?? []) {
+      node.edges = node.edges.filter(edge => {
+        const target = this.nodes.get(edge.to);
+        if (!target) return false;
+        const minCol = Math.floor((Math.min(node.x, target.x) - WIDTH / 2) / this.map.tileSize);
+        const maxCol = Math.floor((Math.max(node.x, target.x) + WIDTH / 2) / this.map.tileSize);
+        const rise = edge.kind === 'jump' || edge.kind === 'ledge' ? JUMP_HEIGHT : 0;
+        const minRow = Math.floor((Math.min(node.y, target.y) - rise - HALF_HEIGHT) / this.map.tileSize);
+        const maxRow = Math.floor((Math.max(node.y, target.y) + HALF_HEIGHT) / this.map.tileSize);
+        for (let crossed = minCol; crossed <= maxCol; crossed++) {
+          const rows = changedRows.get(crossed);
+          if (rows && rows.min <= maxRow && rows.max >= minRow) return false;
+        }
+        return true;
+      });
+      this.pendingEdges.add(node.id);
+    }
     this.revision++;
+  }
+
+  /** A fixed node count, never wall time, makes repair scheduling identical during replay. */
+  stepRepair(nodeBudget: number = TUNING.ai.repairNodeBudget): number {
+    const rebuiltColumns = new Set<number>();
+    let count = 0;
+    while (count < nodeBudget && this.pendingEdges.size) {
+      const id = this.pendingEdges.values().next().value!;
+      this.pendingEdges.delete(id);
+      const node = this.nodes.get(id);
+      if (!node) continue;
+      this.rebuildEdges(node);
+      rebuiltColumns.add(node.col);
+      count++;
+    }
+    if (rebuiltColumns.size) {
+      this.addClimbEdges(rebuiltColumns);
+      if (!this.pendingEdges.size) this.revision++;
+    }
+    return count;
   }
 
   private rebuildColumn(col: number): void {

@@ -1,0 +1,123 @@
+{
+  "preferences": {
+    "disabled": {
+      "hitstop": 0,
+      "shake": false
+    },
+    "small": {
+      "hitstop": 33.333333333333336,
+      "shake": 0.0015415384615384616
+    },
+    "strong": {
+      "hitstop": 100,
+      "shake": 0.004
+    },
+    "clear": {
+      "hitstop": 0,
+      "shake": false
+    }
+  },
+  "timing": {
+    "tick": 7,
+    "scheduled": 100,
+    "frozen": {
+      "tick": 7,
+      "reads": 0,
+      "remaining": 4
+    },
+    "resumed": {
+      "tick": 9,
+      "reads": 2,
+      "jump": true
+    },
+    "replay": {
+      "hooks": 1,
+      "events": 1,
+      "firstEvents": 1
+    },
+    "full": {
+      "effects": 192,
+      "casings": 96,
+      "numbers": 4,
+      "pickupLabels": 3,
+      "maxEffects": 192,
+      "maxCasings": 96,
+      "maxNumbers": 40
+    },
+    "drained": {
+      "effects": 0,
+      "casings": 0,
+      "numbers": 0,
+      "pickupLabels": 3,
+      "maxEffects": 192,
+      "maxCasings": 96,
+      "maxNumbers": 40
+    }
+  },
+  "perf": {
+    "samples": 135,
+    "seconds": 12.03060000000056,
+    "fps": 11.221385467058479,
+    "frameP50": 83.39999999999964,
+    "frameP95": 100.10000000000036,
+    "renderCpuP50": 0.8999999994412065,
+    "renderCpuP95": 2.800000000745058,
+    "simFrameP50": 1.200000001117587,
+    "simFrameP95": 3.699999999254942,
+    "tick": 198,
+    "eventCount": 182,
+    "stats": {
+      "updateMs": 7.400000000372529,
+      "renderCpuMs": 2.599999999627471,
+      "simulationMs": 4.800000000745058,
+      "maxSimulationMs": 5.7999999998137355,
+      "steps": 4,
+      "frames": 141,
+      "slowTicks": 3,
+      "hitstopEvents": 12,
+      "catchupDrops": 0,
+      "activeDust": 41
+    },
+    "pools": {
+      "effects": 64,
+      "casings": 3,
+      "numbers": 5,
+      "pickupLabels": 6,
+      "maxEffects": 192,
+      "maxCasings": 96,
+      "maxNumbers": 40
+    },
+    "terrain": {
+      "total": 8,
+      "visible": 8,
+      "rebuilds": 25
+    },
+    "debris": 96,
+    "chunks": 49,
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+  },
+  "cleanup": {
+    "oldPools": {
+      "effects": 0,
+      "casings": 0,
+      "numbers": 0,
+      "pickupLabels": 0,
+      "maxEffects": 192,
+      "maxCasings": 96,
+      "maxNumbers": 40
+    },
+    "currentPools": {
+      "effects": 0,
+      "casings": 0,
+      "numbers": 0,
+      "pickupLabels": 3,
+      "maxEffects": 192,
+      "maxCasings": 96,
+      "maxNumbers": 40
+    },
+    "terrainTextures": 8,
+    "currentChunks": 8
+  },
+  "errors": []
+}

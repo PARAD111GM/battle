@@ -17,6 +17,39 @@ function advance(world: World, ticks: number, commands: Record<number, Partial<I
 }
 
 describe('full weapon and special content', () => {
+  it('counts a shotgun volley once for accuracy even when several pellets hit', () => {
+    const world = new World(arena(), 4);
+    const shooter = world.addFighter(), target = world.addFighter({ x: 135, hp: 500, maxHp: 500 });
+    shooter.combat.primary = 'shotgun'; shooter.combat.equipped = 'primary';
+    advance(world, 1, { 0: { shoot: true } });
+    expect(500 - target.hp).toBeGreaterThan(WEAPONS.shotgun.damage);
+    expect(shooter.combat.hits).toBe(1);
+    advance(world, WEAPONS.shotgun.cooldownTicks);
+    advance(world, 1, { 0: { shoot: true, aimX: -1 } });
+    expect(shooter.combat.shots).toBe(2);
+    expect(world.results().fighters.find(fighter => fighter.id === shooter.id)?.accuracy).toBe(50);
+  });
+
+  it('reuses consumed transient pickups across repeated weapon throws', () => {
+    const world = new World(arena());
+    const fighter = world.addFighter();
+    fighter.combat.ammo.pistol = 2;
+    for (let cycle = 0; cycle < 6; cycle++) {
+      fighter.combat.equipped = 'sidearm';
+      advance(world, 1, { 0: { interact: true, throw: true } });
+      const thrown = world.projectiles.find(item => item.active && item.kind === 'weapon')!;
+      expect(thrown).toBeDefined(); thrown.life = 1;
+      advance(world, 19);
+      const pickup = world.pickups.find(item => item.active)!;
+      fighter.x = pickup.x; fighter.y = pickup.y;
+      advance(world, 1, { 0: { interact: true } });
+      expect(fighter.combat.sidearm).toBe('pistol');
+      expect(fighter.combat.ammo.pistol).toBe(2);
+      expect(world.pickups).toHaveLength(1);
+      advance(world, 1);
+    }
+  });
+
   it.each(['pistol', 'smg', 'shotgun', 'assault', 'sniper', 'grenade-launcher'])('%s fires its configured weapon family and deals damage', id => {
     const world = new World(arena(), 4);
     const shooter = world.addFighter(), target = world.addFighter({ hp: 500, maxHp: 500 });

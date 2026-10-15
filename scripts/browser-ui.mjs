@@ -1,10 +1,10 @@
 import { chromium, expect } from '@playwright/test';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const base = (process.env.TEST_URL || 'http://127.0.0.1:5173').replace(/\/$/, '');
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  const errors = []; page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   await page.goto(base); await expect(page.locator('#overlay')).toHaveAttribute('data-screen', 'title');
   await page.getByRole('button', { name: 'ENTER THE ARENA' }).click();
   await expect(page.locator('#overlay')).toHaveAttribute('data-screen', 'menu');
@@ -41,7 +41,21 @@ try {
   await page.keyboard.press('Escape'); await expect(page.locator('#overlay')).toHaveAttribute('data-screen', 'pause');
   const pausedTick = await page.evaluate(() => window.__RIVETFALL__.world.tick);
   await page.waitForTimeout(250); expect(await page.evaluate(() => window.__RIVETFALL__.world.tick)).toBe(pausedTick);
-  await page.locator('[data-action="controls"]').click(); await expect(page.locator('.controls-table')).toBeVisible();
+  const originalReplayState = await page.evaluate(() => { const w = window.__RIVETFALL__.world; return JSON.stringify({ fighters: w.fighters, terrain: w.terrain.tiles, projectiles: w.projectiles, pickups: w.pickups, rng: w.rng.state }); });
+  await page.locator('[data-action="settings"]').click();
+  await page.locator('[data-key-bind="jump"]').click(); await page.keyboard.press('v');
+  await page.locator('[data-key-bind="attack"]').click(); await page.keyboard.press('Escape');
+  await expect(page.locator('#overlay')).toHaveAttribute('data-screen', 'settings');
+  await page.locator('[data-volume="music"]').evaluate(element => { element.value = '20'; element.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.locator('[data-effect="screenShake"]').uncheck();
+  expect(await page.evaluate(() => window.__RIVETFALL__.settings.get().keyboard[0].jump)).toBe('KeyV');
+  expect(await page.evaluate(() => window.__RIVETFALL__.audio.stats.volumes.music)).toBe(.2);
+  await page.locator('[data-pref-back]').click();
+  expect(await page.evaluate(() => window.__RIVETFALL__.world.tick)).toBe(pausedTick);
+  const replayDownloadPromise = page.waitForEvent('download'); await page.locator('[data-action="export-replay"]').click();
+  const replayDownload = await replayDownloadPromise, replayJSON = await readFile(await replayDownload.path(), 'utf8');
+  const replayData = JSON.parse(replayJSON); expect(replayData.durationTicks).toBe(pausedTick);
+  await page.locator('[data-action="controls"]').click(); await expect(page.locator('.controls-table')).toBeVisible(); await expect(page.locator('.controls-table tr').filter({ hasText: 'Jump' })).toContainText('V');
   await page.locator('[data-action="back"]').click(); await expect(page.locator('#overlay')).toHaveAttribute('data-screen', 'pause');
   await page.locator('[data-action="resume"]').click();
   await page.waitForFunction(tick => window.__RIVETFALL__.world.tick > tick, pausedTick);
@@ -60,6 +74,18 @@ try {
   await page.keyboard.press('Escape'); await page.locator('[data-action="menu"]').click();
   await expect(page.locator('#overlay')).toHaveAttribute('data-screen', 'menu');
   await page.screenshot({ path: 'test-results/main-menu.png' });
+  const badReplayChooser = page.waitForEvent('filechooser'); await page.locator('[data-action="import-replay"]').click();
+  await (await badReplayChooser).setFiles({ name: 'invalid-replay.json', mimeType: 'application/json', buffer: Buffer.from('{"format":"wrong"}') });
+  await expect(page.locator('.menu-message')).toBeVisible(); await expect(page.locator('#overlay')).toHaveAttribute('data-screen', 'menu');
+  const replayChooser = page.waitForEvent('filechooser'); await page.locator('[data-action="import-replay"]').click();
+  await (await replayChooser).setFiles({ name: 'match-replay.json', mimeType: 'application/json', buffer: Buffer.from(replayJSON) });
+  await page.waitForFunction(() => window.__RIVETFALL__.playback?.finished && window.__RIVETFALL__.menu.screen === 'results');
+  const replayedState = await page.evaluate(() => { const w = window.__RIVETFALL__.world; return JSON.stringify({ fighters: w.fighters, terrain: w.terrain.tiles, projectiles: w.projectiles, pickups: w.pickups, rng: w.rng.state }); });
+  expect(JSON.parse(replayedState)).toEqual(JSON.parse(originalReplayState));
+  await page.locator('[data-action="setup"]').click(); await page.locator('[data-action="characters"]').click(); await page.locator('[data-action="start"]').click();
+  await page.waitForFunction(() => window.__RIVETFALL__.world.tick > 3);
+  expect(await page.evaluate(() => window.__RIVETFALL__.playback === undefined)).toBe(true);
+  await page.keyboard.press('Escape'); await page.locator('[data-action="menu"]').click();
   await page.reload(); await page.getByRole('button', { name: 'ENTER THE ARENA' }).click(); await page.locator('[data-action="setup"]').click();
   await expect(page.getByLabel('Number of fighters')).toHaveValue('6');
   await expect(page.getByLabel('Mode', { exact: true })).toHaveValue('stocks');
@@ -67,5 +93,5 @@ try {
   await page.screenshot({ path: 'test-results/mobile-setup.png' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   if (errors.length) throw new Error(errors.join('\n'));
-  console.log(JSON.stringify({ flow: 'title/menu/setup/characters/match/pause/controls/results/rematch/menu', setup, persistence: 'passed', mobileOverflow: 'none', pageErrors: errors }, null, 2));
+  console.log(JSON.stringify({ flow: 'title/menu/setup/characters/match/pause/controls/results/rematch/menu', setup, settingsRebindAndPause: 'passed', replayImportExportAndExactState: 'passed', persistence: 'passed', mobileOverflow: 'none', pageErrors: errors }, null, 2));
 } finally { await browser.close(); }

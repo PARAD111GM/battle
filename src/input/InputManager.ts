@@ -1,16 +1,8 @@
 import { neutralInput, type InputCommand } from '../sim/types';
 
-export type BindingAction = 'left' | 'right' | 'up' | 'down' | 'jump' | 'attack' | 'shoot' | 'throw' | 'special' | 'roll' | 'block' | 'interact' | 'switch';
-export const DEFAULT_BINDINGS: Record<BindingAction, string> = {
-  left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', jump: 'Space',
-  attack: 'KeyJ', shoot: 'KeyK', throw: 'KeyG', special: 'KeyQ', roll: 'ShiftLeft',
-  block: 'KeyL', interact: 'KeyE', switch: 'KeyR',
-};
-export const SECONDARY_BINDINGS: Record<BindingAction, string> = {
-  left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', jump: 'Enter',
-  attack: 'Comma', shoot: 'Period', throw: 'Slash', special: 'Semicolon', roll: 'ShiftRight',
-  block: 'Quote', interact: 'Backslash', switch: 'BracketRight',
-};
+import { settings, type BindingAction, type KeyboardBindings } from './settings';
+export { DEFAULT_BINDINGS, SECONDARY_BINDINGS } from './settings';
+export type { BindingAction } from './settings';
 
 /** Display labels shared by the help screen and local-player setup. */
 export const CONTROLS = {
@@ -21,7 +13,7 @@ export const CONTROLS = {
   },
   keyboardSecondary: {
     move: 'Arrow keys', aim: 'Arrow keys', jump: 'Enter', attack: ',', shoot: '.',
-    throw: '/', special: ';', roll: 'Right Shift', block: "'", interact: '\\', switch: ']',
+    throw: '/', special: ';', roll: 'Right Shift', block: "'", interact: '\\', switch: ']', slots: '7 / 8 / 9',
   },
   gamepad: {
     move: 'Left stick / D-pad', aim: 'Right stick', jump: 'A / Cross', attack: 'X / Square',
@@ -45,22 +37,28 @@ function availableGamepads(): (Gamepad | null)[] {
 export class InputManager {
   readonly pressed = new Set<string>();
   mouse = { x: 0, y: 0, active: false, left: false, right: false };
-  bindings = { ...DEFAULT_BINDINGS };
+  private pendingKeys = new Set<string>();
+  private mouseButtons = new Set<number>();
+  private pendingMouse = new Set<number>();
+  private padButtons = new Map<number, Set<number>>();
+  private pendingPadButtons = new Map<number, Set<number>>();
   private keyboardFacing = new Map<number, number>();
   private gamepadAim = new Map<number, { x: number; y: number }>();
+  get bindings(): KeyboardBindings { return settings.get().keyboard[0]; }
+  set bindings(value: KeyboardBindings) { settings.update({ keyboard: [value] }); }
 
   constructor(target: HTMLElement) {
     window.addEventListener('keydown', event => {
       if (isInterfaceTarget(event.target) || event.altKey || event.ctrlKey || event.metaKey) return;
-      const gameplayKeys = [...Object.values(this.bindings), ...Object.values(SECONDARY_BINDINGS), 'Digit1', 'Digit2', 'Digit3'];
+      const gameplayKeys = settings.get().keyboard.flatMap(bindings => Object.values(bindings));
       if (!gameplayKeys.includes(event.code)) return;
+      if (!event.repeat && !this.pressed.has(event.code)) this.pendingKeys.add(event.code);
       this.pressed.add(event.code);
       event.preventDefault();
     });
     window.addEventListener('keyup', event => this.pressed.delete(event.code));
     window.addEventListener('blur', () => this.reset());
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.reset(); });
-    // Opening a text field or focusing a menu button must release previously held controls.
     window.addEventListener('focusin', event => { if (isInterfaceTarget(event.target)) this.reset(); });
     target.addEventListener('pointermove', event => {
       if (isInterfaceTarget(event.target)) return;
@@ -71,10 +69,13 @@ export class InputManager {
     });
     target.addEventListener('pointerdown', event => {
       if (isInterfaceTarget(event.target)) return;
+      this.mouseButtons.add(event.button); this.pendingMouse.add(event.button);
       if (event.button === 0) this.mouse.left = true;
       if (event.button === 2) this.mouse.right = true;
+      if (event.button > 0) event.preventDefault();
     });
     window.addEventListener('pointerup', event => {
+      this.mouseButtons.delete(event.button);
       if (event.button === 0) this.mouse.left = false;
       if (event.button === 2) this.mouse.right = false;
     });
@@ -82,14 +83,18 @@ export class InputManager {
     target.addEventListener('contextmenu', event => {
       if (!isInterfaceTarget(event.target)) event.preventDefault();
     });
+    target.addEventListener('auxclick', event => { if (!isInterfaceTarget(event.target)) event.preventDefault(); });
+    // Poll during hitstop too, retaining short gamepad actions until the next simulation tick.
+    const sample = () => { this.sampleGamepads(); requestAnimationFrame(sample); };
+    requestAnimationFrame(sample);
+    settings.subscribe(() => this.reset());
   }
 
-  /** Release held controls without changing a player's remembered facing or aim. */
+  /** Release held and buffered controls without changing remembered facing or aim. */
   reset(): void {
-    this.pressed.clear();
-    this.mouse.left = false;
-    this.mouse.right = false;
-    this.mouse.active = false;
+    this.pressed.clear(); this.pendingKeys.clear(); this.mouseButtons.clear(); this.pendingMouse.clear();
+    this.pendingPadButtons.clear();
+    this.mouse.left = false; this.mouse.right = false; this.mouse.active = false;
   }
 
   connectedGamepads(): number[] {
@@ -97,45 +102,73 @@ export class InputManager {
   }
 
   keyboard(player = 0, aimOrigin?: { x: number; y: number }): InputCommand {
-    const bindings = player === 0 ? this.bindings : SECONDARY_BINDINGS;
-    const has = (action: BindingAction) => this.pressed.has(bindings[action]);
+    const config = settings.get(), bindings = config.keyboard[player === 0 ? 0 : 1];
+    const has = (action: BindingAction) => this.pressed.has(bindings[action]) ||
+      (!['left', 'right', 'up', 'down'].includes(action) && this.pendingKeys.has(bindings[action]));
     const x = Number(has('right')) - Number(has('left'));
     const y = Number(has('down')) - Number(has('up'));
     if (x) this.keyboardFacing.set(player, x);
-    let ax = x || (y ? 0 : this.keyboardFacing.get(player) ?? 1);
-    let ay = y;
+    let ax = x || (y ? 0 : this.keyboardFacing.get(player) ?? 1), ay = y;
     if (player === 0 && this.mouse.active && aimOrigin) {
       const dx = this.mouse.x - aimOrigin.x, dy = this.mouse.y - aimOrigin.y;
       if (dx || dy) { ax = dx; ay = dy; }
     }
     const length = Math.hypot(ax, ay) || 1;
-    const slot = player === 0 ? ['Digit1', 'Digit2', 'Digit3'].findIndex(key => this.pressed.has(key)) : -1;
-    return {
+    const mouse = (action: 'attack' | 'shoot') => player === 0 && config.mouse[action] >= 0 &&
+      (this.mouseButtons.has(config.mouse[action]) || this.pendingMouse.has(config.mouse[action]));
+    const slot = (['slot1', 'slot2', 'slot3'] as const).findIndex(has);
+    const command: InputCommand = {
       moveX: x, moveY: y, aimX: ax / length, aimY: ay / length,
-      jump: has('jump'), attack: has('attack') || (player === 0 && this.mouse.right),
-      shoot: has('shoot') || (player === 0 && this.mouse.left), throw: has('throw'),
-      special: has('special'), roll: has('roll'), block: has('block'), interact: has('interact'),
+      jump: has('jump'), attack: has('attack') || mouse('attack'), shoot: has('shoot') || mouse('shoot'),
+      throw: has('throw'), special: has('special'), roll: has('roll'), block: has('block'), interact: has('interact'),
       switchWeapon: slot >= 0 ? slot + 2 : has('switch') ? 1 : 0,
     };
+    for (const code of Object.values(bindings)) this.pendingKeys.delete(code);
+    if (player === 0) this.pendingMouse.clear();
+    return command;
+  }
+
+  private sampleGamepads(): (Gamepad | null)[] {
+    const pads = availableGamepads(), connected = new Set<number>();
+    for (const pad of pads) if (pad?.connected) {
+      connected.add(pad.index);
+      const previous = this.padButtons.get(pad.index) ?? new Set<number>();
+      const next = new Set<number>(), pending = this.pendingPadButtons.get(pad.index) ?? new Set<number>();
+      pad.buttons.forEach((button, index) => {
+        if (button.pressed) { next.add(index); if (!previous.has(index)) pending.add(index); }
+      });
+      this.padButtons.set(pad.index, next); this.pendingPadButtons.set(pad.index, pending);
+    }
+    for (const index of this.padButtons.keys()) if (!connected.has(index)) {
+      this.padButtons.delete(index); this.pendingPadButtons.delete(index); this.gamepadAim.delete(index);
+    }
+    return pads;
   }
 
   gamepad(index: number): InputCommand {
-    const pad = availableGamepads()[index];
+    const pad = this.sampleGamepads()[index];
     if (!pad?.connected) return neutralInput();
-    const dead = (value: number) => Math.abs(value) > 0.2 ? value : 0;
-    const down = (button: number) => pad.buttons[button]?.pressed ?? false;
-    const x = down(14) || down(15) ? Number(down(15)) - Number(down(14)) : dead(pad.axes[0] ?? 0);
-    const y = down(12) || down(13) ? Number(down(13)) - Number(down(12)) : dead(pad.axes[1] ?? 0);
-    const ax = dead(pad.axes[2] ?? 0), ay = dead(pad.axes[3] ?? 0);
+    const config = settings.get().gamepad, pending = this.pendingPadButtons.get(index);
+    const dead = (value: number) => Math.abs(value) > config.deadzone ? Math.max(-1, Math.min(1, value)) : 0;
+    const down = (action: BindingAction, buffer = true) => {
+      const button = config.buttons[action];
+      return button >= 0 && (Boolean(pad.buttons[button]?.pressed) || (buffer && Boolean(pending?.has(button))));
+    };
+    const left = down('left', false), right = down('right', false), up = down('up', false), downwards = down('down', false);
+    const x = left || right ? Number(right) - Number(left) : dead(pad.axes[config.axes.moveX] ?? 0);
+    const y = up || downwards ? Number(downwards) - Number(up) : dead(pad.axes[config.axes.moveY] ?? 0);
+    const ax = dead(pad.axes[config.axes.aimX] ?? 0), ay = dead(pad.axes[config.axes.aimY] ?? 0) * (config.invertAimY ? -1 : 1);
     if (ax || ay) {
-      const length = Math.hypot(ax, ay);
-      this.gamepadAim.set(index, { x: ax / length, y: ay / length });
+      const length = Math.hypot(ax, ay); this.gamepadAim.set(index, { x: ax / length, y: ay / length });
     }
     const aim = this.gamepadAim.get(index) ?? { x: 1, y: 0 };
-    return {
-      moveX: x, moveY: y, aimX: aim.x, aimY: aim.y, jump: down(0), attack: down(2),
-      shoot: down(7), throw: down(5), special: down(3), roll: down(1), block: down(6),
-      interact: down(4), switchWeapon: down(10) ? 1 : 0,
+    const slot = (['slot1', 'slot2', 'slot3'] as const).findIndex(action => down(action));
+    const command: InputCommand = {
+      moveX: x, moveY: y, aimX: aim.x, aimY: aim.y, jump: down('jump'), attack: down('attack'),
+      shoot: down('shoot'), throw: down('throw'), special: down('special'), roll: down('roll'), block: down('block'),
+      interact: down('interact'), switchWeapon: slot >= 0 ? slot + 2 : down('switch') ? 1 : 0,
     };
+    pending?.clear();
+    return command;
   }
 }

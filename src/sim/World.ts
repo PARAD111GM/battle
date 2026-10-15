@@ -41,8 +41,9 @@ export class World {
   hitboxes: Hitbox[] = [];
   tick = 0;
   events: SimEvent[] = [];
+  private readonly inputObservers = new Set<(commands: Readonly<Record<number, InputCommand>>) => void>();
 
-  constructor(public readonly arena: ArenaData, private readonly seed = 12345, settings: Partial<MatchSettings> = {}) {
+  constructor(public readonly arena: ArenaData, public readonly seed = 12345, settings: Partial<MatchSettings> = {}) {
     this.settings = createMatchSettings(settings);
     this.terrain = new TileMap(arena);
     this.rng = new SeededRandom(seed);
@@ -88,6 +89,7 @@ export class World {
 
   step(commands: Record<number, InputCommand>): void {
     if (this.match.ended) return;
+    for (const observer of this.inputObservers) observer(commands);
     this.events = [];
     this.hitboxes = [];
     this.tick++;
@@ -122,14 +124,21 @@ export class World {
     this.fire.step();
     this.structures.step(this.terrain.changedTiles.values());
     if (this.navigation && this.tick % TUNING.ai.repairTicks === 0 && this.terrain.changedTiles.size > 0) {
-      this.navigation.repair(this.terrain.changedTiles.values());
+      this.navigation.queueRepair(this.terrain.changedTiles.values());
       this.terrain.changedTiles.clear();
     }
+    this.navigation?.stepRepair(TUNING.ai.repairNodeBudget);
     updateMatch(this.settings, this.match, this.fighters);
     if (this.match.ended) this.events.push({ type: 'match-end', x: 0, y: 0, text: this.match.reason });
   }
 
   results(): MatchResults { return getMatchResults(this.match, this.fighters); }
+
+  /** Observe external input before bots resolve their commands. Returns an unsubscribe function. */
+  observeInputs(observer: (commands: Readonly<Record<number, InputCommand>>) => void): () => void {
+    this.inputObservers.add(observer);
+    return () => { this.inputObservers.delete(observer); };
+  }
 
   /** Arena-authored weighted drops, filtered by the selected match weapon set. */
   spawnWeapon(index = 0): string {

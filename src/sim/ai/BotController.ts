@@ -1,5 +1,6 @@
 import { TUNING } from '../../data/tuning';
 import { botDifficulty } from '../../data/ai';
+import { MATERIALS } from '../../data/materials';
 import { SeededRandom } from '../random';
 import { neutralInput, type Fighter, type InputCommand, type Vec2 } from '../types';
 import type { World } from '../World';
@@ -8,7 +9,7 @@ import { blocksVision } from '../weapons/firearms';
 import type { NavEdge, NavNode } from './NavigationGraph';
 
 const A = TUNING.ai;
-interface Observation extends Vec2 { id: number; vx: number; vy: number; tick: number }
+interface Observation extends Vec2 { id: number; vx: number; vy: number; grounded: boolean; tick: number }
 interface Goal { point: Vec2; key: string; label: string }
 
 /** Every bot has a separate seeded RNG and only aims at observations made through bounded vision. */
@@ -22,8 +23,11 @@ export class BotController {
   private selectedGoal: Goal | null = null;
   private readonly visited = new Map<string, number>();
   private readonly blockedGoals = new Map<string, number>();
+  private readonly reachablePickups = new Map<number, { revision: number; until: number; x: number; y: number; reachable: boolean }>();
   private recoveryUntil = 0;
   private recoveryDirection = 1;
+  private clearingDirection = 0;
+  private clearingUntil = 0;
   private nextRecovery = 0;
   private lastPlan = -1000;
   private pathIndex = 1;
@@ -61,7 +65,7 @@ export class BotController {
     visible.sort((a, b) => Math.hypot(a.x - fighter.x, a.y - fighter.y) - Math.hypot(b.x - fighter.x, b.y - fighter.y) || a.id - b.id);
     const target = visible[0];
     if (target) {
-      this.observed = { id: target.id, x: target.x, y: target.y, vx: target.vx, vy: target.vy, tick: world.tick };
+      this.observed = { id: target.id, x: target.x, y: target.y, vx: target.vx, vy: target.vy, grounded: target.grounded, tick: world.tick };
       this.debug.targetId = target.id;
       this.aimOffset = this.rng.range(-difficulty.aimError, difficulty.aimError);
       const distance = Math.hypot(target.x - fighter.x, target.y - fighter.y);
@@ -78,7 +82,17 @@ export class BotController {
     if (!graph) return null;
     const distance = (point: Vec2): number => Math.hypot(point.x - fighter.x, point.y - fighter.y);
     const available = world.pickups.filter(item => item.active && (this.blockedGoals.get(`pickup:${item.id}`) ?? 0) <= world.tick);
-    const nearest = (kind: (item: typeof world.pickups[number]) => boolean) => available.filter(kind).sort((a, b) => distance(a) - distance(b) || a.id - b.id)[0];
+    const reachable = (item: typeof world.pickups[number]): boolean => {
+      const cached = this.reachablePickups.get(item.id);
+      if (cached && cached.revision === graph.revision && world.tick < cached.until && Math.hypot(fighter.x - cached.x, fighter.y - cached.y) < 160) return cached.reachable;
+      const standing = graph.nearest(item.x, item.y);
+      // Destroying a catwalk can leave an authored drop floating far above every standing surface.
+      const reachable = Boolean(standing && Math.hypot(standing.x - item.x, standing.y - item.y) < 48 && graph.findPath(fighter, standing).length);
+      this.reachablePickups.set(item.id, { revision: graph.revision, until: world.tick + 90, x: fighter.x, y: fighter.y, reachable });
+      return reachable;
+    };
+    const nearest = (kind: (item: typeof world.pickups[number]) => boolean) => available.filter(kind)
+      .sort((a, b) => distance(a) - distance(b) || a.id - b.id).find(reachable);
     if (fighter.hp / fighter.maxHp < 0.55) {
       const health = nearest(item => item.kind === 'health');
       if (health) return { point: health, key: `pickup:${health.id}`, label: 'seek health' };
@@ -104,18 +118,30 @@ export class BotController {
       && (this.visited.get(`pickup:${item.id}`) ?? -Infinity) + 300 < world.tick);
     pickups.sort((a, b) => distance(a) - distance(b) || a.id - b.id);
     for (const pickup of pickups.slice(0, 4)) {
-      if (distance(pickup) < A.visionRange) return { point: pickup, key: `pickup:${pickup.id}`, label: 'seek weapon' };
+      if (distance(pickup) < A.visionRange && reachable(pickup)) return { point: pickup, key: `pickup:${pickup.id}`, label: 'seek weapon' };
     }
-    if (this.goal && this.goalKey.startsWith('patrol:') && distance(this.goal) > 40
+    // Destruction separates directed components. Sample only genuinely reachable surfaces;
+    // a short random shortlist can miss every valid route and leave a bot patrolling itself.
+    const start = graph.nearest(fighter.x, fighter.y);
+    const connected = new Map<string, NavNode>();
+    if (start) {
+      const queue = [start]; connected.set(start.id, start);
+      for (let index = 0; index < queue.length; index++) for (const edge of queue[index].edges) {
+        const next = graph.nodes.get(edge.to);
+        if (next && !connected.has(next.id)) { connected.set(next.id, next); queue.push(next); }
+      }
+    }
+    if (this.goal && this.goalKey.startsWith('patrol:') && connected.has(this.goalKey.slice(7)) && distance(this.goal) > 40
       && (this.blockedGoals.get(this.goalKey) ?? 0) <= world.tick) return { point: this.goal, key: this.goalKey, label: 'patrol' };
     if (this.goalKey.startsWith('patrol:')) this.visited.set(this.goalKey, world.tick);
-    const candidates = [...graph.nodes.values()].filter(node => distance(node) > 160 && distance(node) < 800
+    const candidates = [...connected.values()].filter(node => distance(node) > 160
       && (this.blockedGoals.get(`patrol:${node.id}`) ?? 0) <= world.tick);
-    // Prefer unvisited sections. A seeded tie breaker keeps repeated matches reproducible.
-    const scored = candidates.map(node => ({ node, score: (this.visited.get(`patrol:${node.id}`) ?? -10000) + this.rng.next() * 240 }));
+    // Prefer unvisited nearby sections. A seeded tie breaker keeps matches reproducible.
+    const scored = candidates.map(node => ({ node, score: (this.visited.get(`patrol:${node.id}`) ?? -10000)
+      + Math.max(0, distance(node) - 800) + this.rng.next() * 240 }));
     scored.sort((a, b) => a.score - b.score || a.node.id.localeCompare(b.node.id));
-    for (const { node } of scored.slice(0, 8)) if (graph.findPath(fighter, node).length) return { point: node, key: `patrol:${node.id}`, label: 'patrol' };
-    const node = graph.nearest(fighter.x + 200 * fighter.facing, fighter.y);
+    if (scored[0]) return { point: scored[0].node, key: `patrol:${scored[0].node.id}`, label: 'patrol' };
+    const node = [...connected.values()].sort((a, b) => distance(b) - distance(a) || a.id.localeCompare(b.id))[0];
     return node ? { point: node, key: `patrol:${node.id}`, label: 'patrol' } : null;
   }
 
@@ -203,7 +229,7 @@ export class BotController {
       this.selectedGoal = null; this.goal = null; this.goalKey = ''; this.debug.path = [];
       this.debug.stuckTicks = 0; this.lastWantedMotion = false;
       this.progressAnchor = { x: fighter.x, y: fighter.y }; this.lastProgressTick = world.tick;
-      this.cookUntil = 0; this.defendUntil = 0; this.rollNow = false; this.recoveryUntil = 0;
+      this.cookUntil = 0; this.defendUntil = 0; this.rollNow = false; this.recoveryUntil = 0; this.clearingDirection = 0;
     }
     if (world.tick >= this.nextReaction) { this.perceive(world, fighter); this.nextReaction = world.tick + difficulty.reactionTicks; }
     const target = this.observed ? world.fighters.find(other => other.id === this.observed!.id && this.isEnemy(world, fighter, other)) : undefined;
@@ -236,7 +262,14 @@ export class BotController {
         if (distance < 65 && this.defendUntil > world.tick) { command.block = true; command.attack = false; }
         if (this.rollNow && fighter.grounded) { command.roll = true; this.rollNow = false; }
       } else if (visible && weapon?.kind === 'gun') command.shoot = currentAmmo && distance < weapon.range * 0.9;
-      if ((fighter.combat.equipped === 'melee' && distance > 95) || (weapon?.kind === 'gun' && !currentAmmo)) {
+      if (visible && fighter.combat.equipped === 'melee' && fighter.grounded && !observed.grounded
+        && observed.y < fighter.y - 30 && observed.y > fighter.y - 150 && Math.abs(observed.x - fighter.x) < 150) {
+        // Intercept a nearby jumper's landing instead of endlessly exchanging the same two platforms.
+        command.moveX = Math.abs(observed.x - fighter.x) < 65 ? 0 : Math.sign(observed.x - fighter.x);
+        command.jump = false; this.jumpUntil = 0; this.nextJump = world.tick + 12;
+      }
+      const gunReturnRange = Math.max(95, (WEAPONS[fighter.combat.primary]?.blastRadius ?? 0) * 1.4);
+      if ((fighter.combat.equipped === 'melee' && distance > gunReturnRange) || (weapon?.kind === 'gun' && !currentAmmo)) {
         const slot = hasAmmo(fighter.combat.primary) ? 2 : hasAmmo(fighter.combat.sidearm) ? 3 : 4;
         command.switchWeapon = world.tick % 2 === 0 ? slot : 0;
       }
@@ -251,7 +284,13 @@ export class BotController {
       }
       if (fighter.combat.specialMeter >= 100 && visible && distance < (fighter.special === 'slam' ? 140 : 650)) command.special = true;
       if (this.allyInLine(world, fighter, command.aimX, command.aimY, distance)) { command.shoot = false; command.attack = false; }
-      if (weapon?.blastRadius && distance < weapon.blastRadius * 1.15) command.shoot = false;
+      if (visible && weapon?.blastRadius && distance < weapon.blastRadius * 1.3) {
+        // A launcher cannot safely defend its stopping distance. Commit to a close-range weapon.
+        command.shoot = false;
+        if (Math.abs(observed.y - fighter.y) < 65) command.moveX = Math.sign(observed.x - fighter.x);
+        const safeSidearm = hasAmmo(fighter.combat.sidearm) && !WEAPONS[fighter.combat.sidearm]?.blastRadius;
+        command.switchWeapon = world.tick % 2 === 0 ? safeSidearm ? 3 : 4 : 0;
+      }
       if (world.settings.mode === 'team' && world.fighters.some(ally => ally !== fighter && ally.alive && ally.team === fighter.team
         && Math.hypot(ally.x - observed.x, ally.y - observed.y) < Math.max(135, weapon?.blastRadius ?? 0))) {
         command.throw = false;
@@ -289,23 +328,47 @@ export class BotController {
     if (world.tick < this.jumpUntil && edge?.kind !== 'climb') command.jump = true;
     if (fighter.ledge) command.moveY = -1;
 
-    // Only count real, continuous failure to travel. Standing to shoot and hitstun are not stuck.
-    if (!this.lastWantedMotion || fighter.combat.stunTicks > 0 || !this.progressAnchor
-      || Math.abs(fighter.x - this.progressAnchor.x) >= 28
-      || ((fighter.grounded || fighter.climbing) && Math.abs(fighter.y - this.progressAnchor.y) >= 28)) {
+    // Intermittent zero-axis commands at a blocked waypoint must not erase a stalled route.
+    const waitingForPickup = this.goalKey.startsWith('pickup:') && world.pickups.some(item => item.active && this.goalKey === `pickup:${item.id}`);
+    const routePending = waitingForPickup || this.goalKey.startsWith('patrol:') || Boolean(this.goal && Math.hypot(this.goal.x - fighter.x, this.goal.y - fighter.y) > 40);
+    const intentionalHold = visible && (command.shoot || command.block || fighter.combat.reloadTicks > 0);
+    if ((!this.lastWantedMotion && !routePending) || intentionalHold || fighter.combat.stunTicks > 0 || !this.progressAnchor
+      || Math.abs(fighter.x - this.progressAnchor.x) >= A.progressDistance
+      || ((fighter.grounded || fighter.climbing) && Math.abs(fighter.y - this.progressAnchor.y) >= A.progressDistance)) {
       this.progressAnchor = { x: fighter.x, y: fighter.y }; this.lastProgressTick = world.tick;
-      this.debug.stuckTicks = 0;
+      this.debug.stuckTicks = 0; this.clearingDirection = 0;
     } else this.debug.stuckTicks = world.tick - this.lastProgressTick;
     const frontX = fighter.x + Math.sign(command.moveX || fighter.facing) * (fighter.width / 2 + 7);
     const wallAhead = world.terrain.atPixel(frontX, fighter.y) > 0;
     if (wallAhead && edge?.kind !== 'climb' && fighter.grounded && world.tick >= this.nextJump) { this.jumpUntil = world.tick + A.jumpHoldTicks; this.nextJump = world.tick + 50; command.jump = true; }
     if (this.debug.stuckTicks > A.stuckRecoverTicks) {
       this.debug.goal = 'clear blocked route';
-      command.attack = world.tick % difficulty.attackIntervalTicks === 0;
-      command.aimX = Math.sign(command.moveX || fighter.facing); command.aimY = 0;
-      command.shoot = wallAhead && fighter.combat.equipped !== 'melee';
+      if (!this.clearingDirection) {
+        let nearestWall = Infinity;
+        for (const direction of [-1, 1]) for (let distance = fighter.width / 2 + 7; distance <= A.progressDistance * 2; distance += world.terrain.tileSize) {
+          const materials = [-0.3, 0, 0.3].map(height => world.terrain.atPixel(fighter.x + direction * distance, fighter.y + fighter.height * height)).filter(Boolean);
+          if (!materials.length) continue;
+          if (materials.every(material => Number.isFinite(MATERIALS[material]?.hp)) && distance < nearestWall) {
+            nearestWall = distance; this.clearingDirection = direction;
+          }
+          break; // A bedrock wall cannot be excavated by ordinary weapons.
+        }
+        if (this.clearingDirection) this.clearingUntil = world.tick + A.hardRecoveryTicks;
+      }
+      if (this.clearingDirection && world.tick < this.clearingUntil) {
+        // Keep a single excavation direction. Alternating tiny patrol goals otherwise chips
+        // both walls forever; melee clears a full-height corridor while jump/shoot interrupt it.
+        command.moveX = this.clearingDirection; command.moveY = 0;
+        command.aimX = this.clearingDirection; command.aimY = 0;
+        command.attack = world.tick % difficulty.attackIntervalTicks === 0;
+        command.shoot = command.throw = command.jump = command.block = false;
+        this.jumpUntil = 0;
+      } else {
+        command.attack = false;
+        command.aimX = Math.sign(command.moveX || fighter.facing); command.aimY = 0;
+        if (fighter.grounded && world.tick >= this.nextJump) { this.jumpUntil = world.tick + A.jumpHoldTicks; this.nextJump = world.tick + 50; command.jump = true; }
+      }
       this.nextPlan = Math.min(this.nextPlan, world.tick + 1);
-      if (fighter.grounded && world.tick >= this.nextJump) { this.jumpUntil = world.tick + A.jumpHoldTicks; this.nextJump = world.tick + 50; command.jump = true; }
     }
     if (fighter.grounded && command.moveX !== 0 && !['jump', 'drop', 'climb', 'ledge'].includes(edge?.kind ?? '') && !command.jump) {
       const ahead = fighter.x + Math.sign(command.moveX) * 27;
@@ -322,12 +385,13 @@ export class BotController {
         else if (!landing) command.moveX = 0;
       }
     }
-    if (this.debug.stuckTicks > 10 * TUNING.tickRate && world.tick >= this.nextRecovery) {
+    if (this.debug.stuckTicks > A.hardRecoveryTicks && world.tick >= this.nextRecovery
+      && (!this.clearingDirection || world.tick >= this.clearingUntil)) {
       // Repair the affected standing columns, abandon an unreachable goal, then use ordinary movement.
       const col = Math.floor(fighter.x / world.terrain.tileSize), row = Math.floor((fighter.y + fighter.height / 2) / world.terrain.tileSize);
-      world.navigation?.repair([{ col, row }]);
+      world.navigation?.queueRepair([{ col, row }]);
       this.blockedGoals.set(this.goalKey, world.tick + 600);
-      this.selectedGoal = null; this.goal = null; this.goalKey = ''; this.debug.path = [];
+      this.selectedGoal = null; this.goal = null; this.goalKey = ''; this.debug.path = []; this.clearingDirection = 0;
       this.nextDecision = world.tick; this.nextPlan = world.tick;
       this.recoveryDirection = -Math.sign(command.moveX || fighter.facing);
       this.recoveryUntil = world.tick + 40; this.nextRecovery = world.tick + 120;
@@ -346,7 +410,6 @@ export class BotController {
     if (this.allyInLine(world, fighter, command.aimX, command.aimY, this.observed ? Math.hypot(this.observed.x - fighter.x, this.observed.y - fighter.y) : 300)) command.shoot = false;
     const standingNode = fighter.grounded ? world.navigation?.nearest(fighter.x, fighter.y) : undefined;
     if (standingNode) this.visited.set(`patrol:${standingNode.id}`, world.tick);
-    const waitingForPickup = this.goalKey.startsWith('pickup:') && world.pickups.some(item => item.active && this.goalKey === `pickup:${item.id}`);
     this.lastWantedMotion = Math.abs(command.moveX) > 0.1 || Math.abs(command.moveY) > 0.1 || command.jump || waitingForPickup;
     return command;
   }

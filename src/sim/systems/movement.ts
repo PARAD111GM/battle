@@ -99,7 +99,7 @@ export function stepMovement(fighter: Fighter, command: InputCommand, map: TileM
     fighter.climbing = false;
     fighter.ledge = null;
     fighter.action = 'stunned';
-    fighter.vx *= fighter.grounded ? 0.87 : 0.993;
+    fighter.vx *= fighter.grounded ? M.stunnedGroundDrag : M.stunnedAirDrag;
     fighter.vy = Math.min(fighter.vy + M.gravity * movementDt, M.maxFallSpeed);
     moveFighter(fighter, map, props, movementDt);
     return;
