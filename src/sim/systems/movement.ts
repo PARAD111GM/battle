@@ -1,4 +1,5 @@
 import { TUNING } from '../../data/tuning';
+import { SPECIALS } from '../../data/combat';
 import { hasGroundSupport, moveAndCollide, overlapsTerrain } from '../physics/aabb';
 import type { TileMap } from '../terrain/TileMap';
 import type { ArenaProp, Fighter, InputCommand, SimEvent } from '../types';
@@ -6,6 +7,30 @@ import type { ArenaProp, Fighter, InputCommand, SimEvent } from '../types';
 const M = TUNING.movement;
 const approach = (value: number, target: number, amount: number): number => value < target ? Math.min(value + amount, target) : Math.max(value - amount, target);
 const clampAxis = (value: number): number => Number.isFinite(value) ? Math.max(-1, Math.min(1, value)) : 0;
+const isPlatform = (prop: ArenaProp): boolean => ['moving-platform', 'movingPlatform', 'platform', 'elevator'].includes(prop.type);
+
+function platformSupport(fighter: Fighter, props: ArenaProp[]): boolean {
+  return props.some(prop => isPlatform(prop) && Math.abs(fighter.y + fighter.height / 2 - prop.y) <= 0.75
+    && fighter.x + fighter.width / 2 > prop.x && fighter.x - fighter.width / 2 < prop.x + prop.width);
+}
+
+function moveFighter(fighter: Fighter, map: TileMap, props: ArenaProp[], dt: number): ReturnType<typeof moveAndCollide> {
+  const oldFeet = fighter.y + fighter.height / 2, wasGrounded = fighter.grounded;
+  const result = moveAndCollide(fighter, map, dt);
+  if (fighter.vy >= 0) {
+    let top = Infinity;
+    for (const prop of props) {
+      if (!isPlatform(prop) || oldFeet > prop.y + 0.75 || fighter.y + fighter.height / 2 < prop.y - 0.001) continue;
+      if (fighter.x + fighter.width / 2 <= prop.x || fighter.x - fighter.width / 2 >= prop.x + prop.width) continue;
+      if (!overlapsTerrain(map, fighter.x, prop.y - fighter.height / 2, fighter.width, fighter.height)) top = Math.min(top, prop.y);
+    }
+    if (top < Infinity) {
+      fighter.y = top - fighter.height / 2; fighter.vy = 0; fighter.grounded = true;
+      result.landed = !wasGrounded;
+    }
+  }
+  return result;
+}
 
 function nearbyClimbable(fighter: Fighter, props: ArenaProp[]): ArenaProp | undefined {
   return props.find(prop => (prop.type === 'ladder' || prop.type === 'rope')
@@ -54,6 +79,8 @@ function tryGrabLedge(fighter: Fighter, map: TileMap, moveX: number, moveY: numb
 
 /** One fixed tick of locomotion. No rendering, wall clock, or browser dependencies. */
 export function stepMovement(fighter: Fighter, command: InputCommand, map: TileMap, props: ArenaProp[], events: SimEvent[]): void {
+  const speedScale = fighter.speedScale ?? 1;
+  const movementDt = TUNING.dt * (fighter.combat.slowTicks > 0 ? SPECIALS.slowScale : 1);
   const moveX = clampAxis(command.moveX);
   const moveY = clampAxis(command.moveY);
   const jumpPressed = command.jump && !fighter.jumpHeld;
@@ -65,7 +92,7 @@ export function stepMovement(fighter: Fighter, command: InputCommand, map: TileM
   fighter.invulnerableTicks = Math.max(0, fighter.invulnerableTicks - 1);
   fighter.climbCooldownTicks = Math.max(0, fighter.climbCooldownTicks - 1);
   fighter.jumpBufferTicks = jumpPressed ? M.jumpBufferTicks : Math.max(0, fighter.jumpBufferTicks - 1);
-  fighter.grounded = fighter.grounded && hasGroundSupport(fighter, map);
+  fighter.grounded = fighter.vy >= 0 && (hasGroundSupport(fighter, map) || platformSupport(fighter, props));
   fighter.coyoteTicks = fighter.grounded ? M.coyoteTicks : Math.max(0, fighter.coyoteTicks - 1);
 
   if (fighter.combat.stunTicks > 0) {
@@ -73,8 +100,8 @@ export function stepMovement(fighter: Fighter, command: InputCommand, map: TileM
     fighter.ledge = null;
     fighter.action = 'stunned';
     fighter.vx *= fighter.grounded ? 0.87 : 0.993;
-    fighter.vy = Math.min(fighter.vy + M.gravity * TUNING.dt, M.maxFallSpeed);
-    moveAndCollide(fighter, map, TUNING.dt);
+    fighter.vy = Math.min(fighter.vy + M.gravity * movementDt, M.maxFallSpeed);
+    moveFighter(fighter, map, props, movementDt);
     return;
   }
   const combatAction = fighter.action.startsWith('melee-') || ['shoot', 'reload', 'throw-windup', 'throw-recovery', 'block', 'special'].includes(fighter.action);
@@ -83,7 +110,7 @@ export function stepMovement(fighter: Fighter, command: InputCommand, map: TileM
     const ledge = fighter.ledge;
     if (jumpPressed) {
       jump(fighter, command, events, M.ledgeJumpSpeed);
-      fighter.vx = moveX * M.runSpeed;
+      fighter.vx = moveX * (M.runSpeed * speedScale);
     } else if (moveY < -0.25) {
       const standX = ledge.x + fighter.facing * (fighter.width / 2 + 1);
       const standY = ledge.y - fighter.height / 2;
@@ -97,7 +124,7 @@ export function stepMovement(fighter: Fighter, command: InputCommand, map: TileM
       fighter.ledge = null;
       fighter.action = 'fall';
       fighter.climbCooldownTicks = M.ledgeDropLockTicks;
-      fighter.vx = moveX * M.runSpeed;
+      fighter.vx = moveX * (M.runSpeed * speedScale);
     } else {
       fighter.vx = fighter.vy = 0;
       fighter.action = 'hang';
@@ -117,13 +144,13 @@ export function stepMovement(fighter: Fighter, command: InputCommand, map: TileM
       fighter.climbCooldownTicks = M.climbDetachLockTicks;
     } else if (jumpPressed) {
       jump(fighter, command, events);
-      fighter.vx = moveX * M.runSpeed;
+      fighter.vx = moveX * (M.runSpeed * speedScale);
     } else {
       fighter.action = 'climb';
       fighter.grounded = false;
-      fighter.vx = (approach(fighter.x, climbable.x + climbable.width / 2, M.climbSpeed * TUNING.dt) - fighter.x) / TUNING.dt;
-      fighter.vy = moveY * M.climbSpeed;
-      moveAndCollide(fighter, map, TUNING.dt);
+      fighter.vx = (approach(fighter.x, climbable.x + climbable.width / 2, (M.climbSpeed * speedScale) * movementDt) - fighter.x) / movementDt;
+      fighter.vy = moveY * (M.climbSpeed * speedScale);
+      moveFighter(fighter, map, props, movementDt);
       if (fighter.grounded && moveY > 0.25) {
         fighter.climbing = false;
         fighter.action = 'idle';
@@ -145,18 +172,19 @@ export function stepMovement(fighter: Fighter, command: InputCommand, map: TileM
     events.push({ type: 'roll', fighterId: fighter.id, x: fighter.x, y: fighter.y });
   }
   if (fighter.action === 'roll') {
-    fighter.vx = fighter.facing * M.rollSpeed;
+    fighter.vx = fighter.facing * (M.rollSpeed * speedScale);
   } else {
     const acceleration = fighter.grounded ? M.acceleration : M.airAcceleration;
-    fighter.vx = approach(fighter.vx, moveX * M.runSpeed, (moveX === 0 && fighter.grounded ? M.friction : acceleration) * TUNING.dt);
+    const dashActive = fighter.special === 'bullet-time' && fighter.combat.specialPhase === 'dash';
+    fighter.vx = dashActive ? fighter.combat.aimX * SPECIALS.dashSpeed : approach(fighter.vx, moveX * (M.runSpeed * speedScale), (moveX === 0 && fighter.grounded ? M.friction : acceleration) * movementDt);
     if (fighter.jumpBufferTicks > 0 && (fighter.grounded || fighter.coyoteTicks > 0)) jump(fighter, command, events);
   }
   if (jumpReleased && fighter.vy < 0) fighter.vy *= M.jumpCut;
   const fastFalling = moveY > 0.5 && fighter.vy >= 0;
   const gravityMultiplier = fastFalling ? M.fastFallMultiplier : 1;
-  fighter.vy = Math.min(fighter.vy + M.gravity * gravityMultiplier * TUNING.dt, M.maxFallSpeed * gravityMultiplier);
+  fighter.vy = Math.min(fighter.vy + M.gravity * gravityMultiplier * movementDt, M.maxFallSpeed * gravityMultiplier);
   const landingSpeed = fighter.vy;
-  const collision = moveAndCollide(fighter, map, TUNING.dt);
+  const collision = moveFighter(fighter, map, props, movementDt);
   if (collision.landed) {
     events.push({ type: 'land', fighterId: fighter.id, x: fighter.x, y: fighter.y + fighter.height / 2, intensity: Math.min(1, landingSpeed / M.maxFallSpeed) });
     if (fighter.jumpBufferTicks > 0 && fighter.action !== 'roll') jump(fighter, command, events);

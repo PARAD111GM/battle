@@ -1,15 +1,16 @@
-import { COMBAT, GRENADE, type AttackDefinition } from '../../data/combat';
+import { COMBAT, GRENADE, THROWABLES, type AttackDefinition } from '../../data/combat';
 import { TUNING } from '../../data/tuning';
 import { releaseHeldProp, tryGrabProp } from '../entities/props';
 import { overlapsTerrain } from '../physics/aabb';
 import type { Fighter, InputCommand } from '../types';
 import type { World } from '../World';
 import { equippedWeapon, WEAPONS } from '../weapons/definitions';
-import { fireGun, hasLineOfSight, startReload, throwGrenade, tryPickup } from '../weapons/firearms';
+import { detonateProjectile, fireGun, hasLineOfSight, startReload, throwGrenade, throwHeldWeapon, tryPickup } from '../weapons/firearms';
+import { activateSpecial, stepSpecial } from '../weapons/specials';
 import type { WeaponSlot } from '../weapons/types';
 
 function attackDefinition(fighter: Fighter): AttackDefinition | undefined {
-  return (COMBAT.attacks as Record<string, AttackDefinition>)[fighter.combat.pendingAttack];
+  return WEAPONS[fighter.combat.pendingAttack]?.attack ?? (COMBAT.attacks as Record<string, AttackDefinition>)[fighter.combat.pendingAttack];
 }
 
 function startMelee(fighter: Fighter, command: InputCommand, world: World): void {
@@ -20,11 +21,13 @@ function startMelee(fighter: Fighter, command: InputCommand, world: World): void
   let attack: string;
   if (command.moveY < -0.3) { attack = 'uppercut'; combat.meleeStage = 0; }
   else if (!fighter.grounded && command.moveY > 0.3) { attack = 'divekick'; combat.meleeStage = 0; fighter.vy = Math.max(fighter.vy, 600); }
+  else if (WEAPONS[combat.melee]?.attack && combat.durability[combat.melee] > 0) { attack = combat.melee; combat.meleeStage = 0; }
   else { combat.meleeStage = combat.comboWindow > 0 ? combat.meleeStage % 3 + 1 : 1; attack = `jab${combat.meleeStage}`; }
   combat.pendingAttack = attack;
   combat.hitTargets = [];
   combat.hitProps = [];
   combat.hitTiles = [];
+  combat.wearApplied = false;
   combat.attackBufferTicks = 0;
   const definition = attackDefinition(fighter)!;
   combat.comboWindow = COMBAT.comboWindowTicks + definition.windupTicks + definition.activeTicks + definition.recoveryTicks;
@@ -33,13 +36,13 @@ function startMelee(fighter: Fighter, command: InputCommand, world: World): void
 }
 
 function progressAction(fighter: Fighter): void {
-  if (!fighter.action.startsWith('melee-') && !['shoot', 'throw-recovery', 'stunned'].includes(fighter.action)) return;
+  if (!fighter.action.startsWith('melee-') && !['shoot', 'throw-recovery', 'stunned', 'special'].includes(fighter.action)) return;
   if (fighter.actionTicks > 0) fighter.actionTicks--;
   const attack = attackDefinition(fighter);
   if (fighter.actionTicks > 0) return;
   if (fighter.action === 'melee-windup' && attack) { fighter.action = 'melee-active'; fighter.actionTicks = attack.activeTicks; }
   else if (fighter.action === 'melee-active' && attack) { fighter.action = 'melee-recovery'; fighter.actionTicks = attack.recoveryTicks; }
-  else if (fighter.action === 'melee-recovery' || fighter.action === 'shoot' || fighter.action === 'throw-recovery' || fighter.action === 'stunned') {
+  else if (fighter.action === 'melee-recovery' || fighter.action === 'shoot' || fighter.action === 'throw-recovery' || fighter.action === 'stunned' || fighter.action === 'special') {
     fighter.action = fighter.grounded ? 'idle' : 'fall';
     fighter.combat.pendingAttack = '';
   }
@@ -77,13 +80,19 @@ export function stepCombat(world: World, fighter: Fighter, command: InputCommand
   const throwReleased = !command.throw && combat.throwHeld;
   const throwPressed = command.throw && !combat.throwHeld;
   const switchPressed = command.switchWeapon !== 0 && !combat.switchHeld;
+  const specialPressed = command.special && !combat.specialHeld;
   combat.attackHeld = command.attack;
   combat.shootHeld = command.shoot;
   combat.interactHeld = command.interact;
   combat.switchHeld = command.switchWeapon !== 0;
   combat.throwHeld = command.throw;
+  combat.specialHeld = command.special;
   combat.attackBufferTicks = attackPressed ? COMBAT.attackBufferTicks : Math.max(0, combat.attackBufferTicks - 1);
-  combat.cooldown = Math.max(0, combat.cooldown - 1);
+  combat.flashTicks = Math.max(0, combat.flashTicks - 1);
+  combat.slowTicks = Math.max(0, combat.slowTicks - 1);
+  const timeStep = combat.slowTicks > 0 ? (world.tick % 2 === 0 ? 1 : 0) : fighter.special === 'bullet-time' && combat.specialTicks > 0 ? 2 : 1;
+  combat.cooldown = Math.max(0, combat.cooldown - timeStep);
+  stepSpecial(world, fighter);
   combat.comboWindow = Math.max(0, combat.comboWindow - 1);
   if (fighter.action !== 'block') combat.blockMeter = Math.min(COMBAT.guardMaximum, combat.blockMeter + COMBAT.guardRegenPerTick);
   const aimLength = Math.hypot(command.aimX, command.aimY);
@@ -105,15 +114,19 @@ export function stepCombat(world: World, fighter: Fighter, command: InputCommand
     }
     return;
   }
+  if (specialPressed && combat.cookTicks === 0 && combat.grabTarget === null && combat.reloadTicks === 0 && !fighter.action.startsWith('melee-') && fighter.action !== 'roll' && activateSpecial(world, fighter)) return;
+  if (command.interact && throwPressed && throwHeldWeapon(world, fighter)) return;
   if (holdGrab(world, fighter, attackPressed)) return;
   if (switchPressed) {
-    const slots: WeaponSlot[] = ['primary', 'sidearm', 'melee'];
-    combat.equipped = command.switchWeapon === 1 ? slots[(slots.indexOf(combat.equipped) + 1) % slots.length] : slots[Math.max(0, Math.min(2, command.switchWeapon - 2))];
+    const allSlots: WeaponSlot[] = ['primary', 'sidearm', 'melee'];
+    const slots = allSlots.filter(slot => combat[slot]);
+    const requested = command.switchWeapon === 1 ? slots[(slots.indexOf(combat.equipped) + 1) % slots.length] : allSlots[Math.max(0, Math.min(2, command.switchWeapon - 2))];
+    if (combat[requested]) combat.equipped = requested;
     combat.reloadTicks = 0;
     if (fighter.action === 'reload') fighter.action = 'idle';
   }
   if (combat.reloadTicks > 0) {
-    combat.reloadTicks--;
+    combat.reloadTicks = Math.max(0, combat.reloadTicks - timeStep);
     if (combat.reloadTicks === 0) {
       const id = equippedWeapon(combat), weapon = WEAPONS[id];
       if (weapon) {
@@ -124,9 +137,11 @@ export function stepCombat(world: World, fighter: Fighter, command: InputCommand
     }
   }
   progressAction(fighter);
-  const busy = fighter.action.startsWith('melee-') || fighter.action === 'roll' || fighter.action === 'throw-recovery';
+  const busy = fighter.action.startsWith('melee-') || fighter.action === 'roll' || fighter.action === 'throw-recovery' || fighter.action === 'special';
   if (interactPressed && !busy && combat.cookTicks === 0) {
-    const target = world.fighters.find(other => other !== fighter && other.alive && other.invulnerableTicks === 0 && Math.hypot(other.x - fighter.x, other.y - fighter.y) < COMBAT.grabRange);
+    const target = world.fighters.find(other => other !== fighter && other.alive && other.invulnerableTicks === 0
+      && (world.settings.mode !== 'team' || world.settings.friendlyFire || other.team !== fighter.team)
+      && Math.hypot(other.x - fighter.x, other.y - fighter.y) < COMBAT.grabRange);
     if (target) {
       combat.grabTarget = target.id; combat.grabTicks = COMBAT.grabDurationTicks;
       fighter.action = 'throw-windup'; fighter.actionTicks = COMBAT.grabDurationTicks;
@@ -134,16 +149,19 @@ export function stepCombat(world: World, fighter: Fighter, command: InputCommand
       world.events.push({ type: 'grab', fighterId: fighter.id, x: target.x, y: target.y });
       return;
     }
+    if (tryPickup(world, fighter)) return;
     if (tryGrabProp(world, fighter)) return;
-    if (!tryPickup(world, fighter)) startReload(world, fighter);
+    startReload(world, fighter);
   }
   if (!busy && combat.reloadTicks === 0) {
     if (command.throw && (combat.cookTicks > 0 || throwPressed) && combat.throwableCount > 0) {
+      const throwable = THROWABLES[combat.throwable] ?? THROWABLES.grenade;
       combat.cookTicks++;
-      fighter.action = 'throw-windup'; fighter.actionTicks = GRENADE.fuseTicks - combat.cookTicks;
-      if (combat.cookTicks >= GRENADE.fuseTicks) {
+      fighter.action = 'throw-windup'; fighter.actionTicks = throwable.fuseTicks - combat.cookTicks;
+      if (combat.cookTicks >= throwable.fuseTicks) {
         combat.throwableCount--; combat.cookTicks = 0;
-        world.explode(fighter.x, fighter.y, GRENADE.blastRadius, GRENADE.damage, fighter.id);
+        combat.throwableAmmo[combat.throwable] = combat.throwableCount;
+        detonateProjectile(world, { active: true, id: world.tick * 100 + fighter.id, owner: fighter.id, kind: 'grenade', weapon: combat.throwable, x: fighter.x, y: fighter.y, vx: 0, vy: 0, radius: throwable.radius, life: 0, damage: throwable.damage, blastRadius: throwable.blastRadius, effect: throwable.effect });
       }
       return;
     }
@@ -175,11 +193,11 @@ export function resolveMelee(world: World): void {
         const key = `${col},${row}`;
         if (!world.terrain.isSolid(col, row) || owner.combat.hitTiles.includes(key)) continue;
         owner.combat.hitTiles.push(key);
-        world.damageTerrain(col, row, TUNING.props.meleeTerrainPower, owner.id);
+        world.damageTerrain(col, row, WEAPONS[owner.combat.pendingAttack]?.terrainPower ?? TUNING.props.meleeTerrainPower, owner.id);
       }
     }
     for (const prop of world.props) {
-      if (!prop.active || !prop.dynamic || owner.combat.hitProps.includes(prop.id)) continue;
+      if (!prop.active || !prop.damageable || (prop.type === 'door' && prop.open) || owner.combat.hitProps.includes(prop.id)) continue;
       if (Math.abs(prop.x - hitbox.x) > (prop.width + hitbox.width) / 2 || Math.abs(prop.y - hitbox.y) > (prop.height + hitbox.height) / 2) continue;
       owner.combat.hitProps.push(prop.id);
       world.damageProp(prop, hitbox.damage, owner.id);
@@ -190,6 +208,15 @@ export function resolveMelee(world: World): void {
       if (!hasLineOfSight(world, owner.x, owner.y, target.x, target.y)) continue;
       owner.combat.hitTargets.push(target.id);
       world.damageFighter(target, hitbox.damage, owner.id, hitbox.knockback, hitbox.angle, hitbox.kind);
+    }
+    const weapon = WEAPONS[owner.combat.pendingAttack];
+    if (weapon?.durability && !owner.combat.wearApplied && (owner.combat.hitTargets.length || owner.combat.hitProps.length || owner.combat.hitTiles.length)) {
+      owner.combat.wearApplied = true;
+      owner.combat.durability[owner.combat.pendingAttack] = Math.max(0, owner.combat.durability[owner.combat.pendingAttack] - 1);
+      if (owner.combat.durability[owner.combat.pendingAttack] === 0) {
+        owner.combat.melee = 'unarmed';
+        world.events.push({ type: 'weapon-break', fighterId: owner.id, x: owner.x, y: owner.y, weapon: owner.combat.pendingAttack });
+      }
     }
   }
 }

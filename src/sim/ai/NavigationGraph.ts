@@ -28,7 +28,7 @@ export class NavigationGraph {
   private readonly reach: number;
   private readonly reachColumns: number;
 
-  constructor(private readonly map: TileMap, private readonly props: ArenaProp[]) {
+  constructor(private readonly map: TileMap, private props: ArenaProp[]) {
     this.reach = this.jumpDuration(map.height * map.tileSize + HEIGHT) * M.runSpeed;
     this.reachColumns = Math.ceil((this.reach + map.tileSize + WIDTH) / map.tileSize);
     for (let col = 0; col < map.width; col++) this.rebuildColumn(col);
@@ -51,6 +51,20 @@ export class NavigationGraph {
   }
 
   path(fromId: string, toId: string): NavNode[] { return aStar(this.nodes, fromId, toId); }
+
+  /** Runtime anchors can remove climbables without changing nearby standing surfaces. */
+  setClimbables(props: ArenaProp[]): void {
+    const columns = new Set<number>();
+    for (const node of this.nodes.values()) if (node.edges.some(edge => edge.kind === 'climb')) columns.add(node.col);
+    for (const prop of props) {
+      const center = Math.floor((prop.x + prop.width / 2) / this.map.tileSize);
+      for (let col = center - 2; col <= center + 2; col++) columns.add(col);
+    }
+    this.props = props;
+    for (const col of columns) for (const node of this.columns.get(col) ?? []) this.rebuildEdges(node);
+    this.addClimbEdges(columns);
+    this.revision++;
+  }
 
   findPath(from: Vec2, to: Vec2): NavNode[] {
     const start = this.nearest(from.x, from.y), goal = this.nearest(to.x, to.y);

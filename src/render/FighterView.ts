@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import type { Fighter } from '../sim/types';
+import { drawWeaponArt, drawThrowableArt } from './WeaponArt';
+import { WEAPONS } from '../sim/weapons/definitions';
 
 /** Draws the current pose only. All action timing and collision live in the simulation. */
 export class FighterView {
@@ -47,6 +49,11 @@ export class FighterView {
     g.fillStyle(0x142129).fillRoundedRect(2 + stride, 13 + (airborne ? -3 : 0) + offset, 11, 5, 1);
     g.lineStyle(6, 0x273e43).lineBetween(-7, -5 + offset, -10 - stride * 0.6, climbing ? -19 : 4 + offset);
     // A ragged scarf catches motion and makes facing readable even at small scale.
+    if(fighter.character==='wisp')g.fillStyle(0x263747).fillTriangle(-7,-15+offset,-22,15+offset,-5,8+offset);
+    if(fighter.character==='cinder') {
+      g.fillStyle(0x25383c).fillRoundedRect(-16,-10+offset,10,22,2);
+      g.fillStyle(0xc89258).fillRect(-16,-6+offset,4,13);
+    }
     g.fillStyle(0xf2b363).fillTriangle(-7, -9 + offset, -17 - Math.min(Math.abs(fighter.vx) / 35, 8), -6 + offset, -12, -2 + offset);
     g.fillStyle(0x101d25).fillRoundedRect(-10, -10 + offset, 20, 22, 3);
     g.fillStyle(fighter.color).fillRoundedRect(-8, -9 + offset, 16, 17, 2);
@@ -64,6 +71,7 @@ export class FighterView {
     }
     if (combat?.cookTicks > 0) { frontHandX = -7; frontHandY = -21; }
     if (combat && combat.heldProp !== null) { frontHandX = 22; frontHandY = -5; }
+    if(fighter.action==='special'&&fighter.special==='slam'){frontHandX=10;frontHandY=combat.specialPhase==='rise'?-23:8;}
     g.lineStyle(6, fighter.color).lineBetween(7, -5 + offset, frontHandX, frontHandY);
     g.fillStyle(0xf2c59c).fillRect(frontHandX - 3, frontHandY - 2, 6, 5);
     g.fillStyle(0x162029).fillRoundedRect(-8, head - 8, 18, 16, 3);
@@ -74,6 +82,25 @@ export class FighterView {
     g.fillStyle(0xc6fff0).fillRect(3, head - 1, 7, 2);
     g.fillStyle(0x5d3a35).fillRect(6, head + 5, 3, 1);
     g.fillStyle(0xe8ad5e).fillRect(-7, -10 + offset, 17, 4);
+    if(fighter.character==='rivet') {
+      g.fillStyle(0xb1bca4).fillRoundedRect(-12,-8+offset,7,7,2).fillRoundedRect(7,-8+offset,6,7,2);
+      g.fillStyle(0x344744).fillRect(-10,-5+offset,3,2).fillRect(9,-5+offset,2,2);
+    } else if(fighter.character==='flux') {
+      g.fillStyle(0x665b44).fillRect(-7,head-13,15,9).fillRect(-13,head-5,28,3);
+      g.fillStyle(fighter.color).fillRect(-7,head-7,15,2);
+      g.lineStyle(3,0x635946).lineBetween(-5,-5+offset,5,6+offset);
+      g.fillStyle(0xe6c58e).fillRect(-3,-4+offset,2,3).fillRect(1,0+offset,2,3);
+    } else if(fighter.character==='cinder') {
+      g.fillStyle(0x34454a).fillRoundedRect(1,head+1,11,7,2);
+      g.fillStyle(0xabc5b3).fillCircle(5,head+4,3);
+      g.fillStyle(0x172a33).fillCircle(5,head+4,1.5);
+      g.lineStyle(2,0xd4ac73).lineBetween(-8,head-7,-12,head-16);
+      g.fillStyle(0xffaa69).fillCircle(-12,head-16,2);
+    } else if(fighter.character==='wisp') {
+      g.fillStyle(0x263746).fillTriangle(-10,head-2,-3,head-17,11,head-2);
+      g.fillStyle(fighter.color).fillTriangle(-5,head-6,-2,head-12,5,head-6);
+      g.fillStyle(0xb8ffdf).fillRect(4,head-1,6,2);
+    }
     if (fighter.action === 'block') g.lineStyle(2, 0xa5fff0, 0.65).strokeEllipse(12, -4, 18, 32);
     this.shadow.setPosition(fighter.x, fighter.y + fighter.height / 2 + 2).setScale(crouch ? 1.3 : 1, 1).setAlpha(fighter.grounded ? 0.9 : 0.2);
     this.label.setPosition(fighter.x, fighter.y - 40);
@@ -82,37 +109,33 @@ export class FighterView {
       this.marker.fillStyle(0x14232b,0.9).fillRect(-16,3,32,4);
       this.marker.fillStyle(fighter.hp/fighter.maxHp>0.3?fighter.color:0xff8d77).fillRect(-15,4,30*Math.max(0,fighter.hp/fighter.maxHp),2);
     }
-    this.drawWeapon(fighter, crouch || climbing || fighter.action.startsWith('melee'));
+    this.drawWeapon(fighter, crouch || climbing);
   }
 
   private drawWeapon(fighter: Fighter, hidden: boolean): void {
     const g = this.weaponArt; g.clear();
     const combat = fighter.combat;
-    if (!combat || hidden || combat.heldProp !== null) return;
+    if (!combat || hidden || combat.heldProp !== null || (fighter.action==='special'&&fighter.special==='slam')) return;
     if (combat.cookTicks > 0) {
       g.setPosition(fighter.x - fighter.facing * 7, fighter.y - 24).setRotation(0).setScale(1);
-      g.fillStyle(0x263d3b).fillCircle(0, 0, 5);
-      g.fillStyle(0x90a985).fillRect(-3, -4, 6, 7);
-      g.fillStyle(0xf8c25e).fillRect(-2, -7, 4, 3);
+      drawThrowableArt(g,combat.throwable,0,0,5);
       return;
     }
     const weapon = combat[combat.equipped];
-    if (combat.equipped === 'melee' || !weapon) return;
-    const angle = Math.atan2(combat.aimY, combat.aimX);
-    const recoil = fighter.action === 'shoot' ? 3 : 0;
-    g.setPosition(fighter.x + combat.aimX * (12 - recoil), fighter.y - 3 + combat.aimY * (12 - recoil));
-    g.setRotation(angle).setScale(1, combat.aimX < 0 ? -1 : 1);
-    const pistol = weapon === 'pistol'; const shotgun = weapon === 'shotgun';
-    const length = pistol ? 18 : shotgun ? 34 : 28;
-    g.fillStyle(0x12232c).fillRect(-3, -5, length + 5, 10);
-    g.fillStyle(0x95a7a2).fillRect(0, -5, length, 4);
-    g.fillStyle(0x3b5156).fillRect(0, -1, length, 5);
-    g.fillStyle(0x263840).fillRect(0, 3, 6, 8);
-    g.fillStyle(shotgun ? 0xa47a48 : 0xc7a766).fillRect(pistol ? 2 : 11, 1, pistol ? 4 : 11, 4);
-    g.fillStyle(0x0e1a23).fillRect(length - 2, -3, 5, 4);
-    g.fillStyle(0xe2c58f).fillRect(2, -6, 3, 1);
-    if (!pistol) g.fillStyle(0x728583).fillRect(-10, -1, 9, 6);
-    if (fighter.action === 'reload') g.lineStyle(1, 0xffdc8e, 0.8).strokeCircle(10, 0, 18);
+    if(!weapon)return;
+    const melee=WEAPONS[weapon]?.kind==='melee';
+    if(!melee&&fighter.action.startsWith('melee'))return;
+    let angle=Math.atan2(combat.aimY,combat.aimX);
+    if(melee) {
+      const pose=fighter.action==='melee-windup'?-1.7:fighter.action==='melee-active'?-0.1:fighter.action==='melee-recovery'?0.8:-0.55;
+      angle=fighter.facing===1?pose:Math.PI-pose;
+    }
+    const recoil=fighter.action==='shoot'?3:0;
+    g.setPosition(fighter.x+Math.cos(angle)*(12-recoil),fighter.y-3+Math.sin(angle)*(12-recoil));
+    g.setRotation(angle).setScale(1,Math.cos(angle)<0?-1:1);
+    drawWeaponArt(g,weapon);
+    if(fighter.action==='reload')g.lineStyle(1,0xffdc8e,0.8).strokeCircle(10,0,18);
+
   }
 
   destroy(): void { this.art.destroy(); this.shadow.destroy(); this.label.destroy(); this.marker.destroy(); this.weaponArt.destroy(); }

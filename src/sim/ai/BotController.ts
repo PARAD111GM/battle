@@ -1,21 +1,30 @@
 import { TUNING } from '../../data/tuning';
+import { botDifficulty } from '../../data/ai';
 import { SeededRandom } from '../random';
 import { neutralInput, type Fighter, type InputCommand, type Vec2 } from '../types';
 import type { World } from '../World';
 import { equippedWeapon, WEAPONS } from '../weapons/definitions';
-import { hasLineOfSight } from '../weapons/firearms';
+import { blocksVision } from '../weapons/firearms';
 import type { NavEdge, NavNode } from './NavigationGraph';
 
 const A = TUNING.ai;
 interface Observation extends Vec2 { id: number; vx: number; vy: number; tick: number }
+interface Goal { point: Vec2; key: string; label: string }
 
-/** A Normal bot has its own RNG and only aims at observations made through bounded vision. */
+/** Every bot has a separate seeded RNG and only aims at observations made through bounded vision. */
 export class BotController {
   readonly rng: SeededRandom;
   readonly debug: { goal: string; targetId: number | null; path: string[]; stuckTicks: number } = { goal: 'patrol', targetId: null, path: [], stuckTicks: 0 };
   private observed: Observation | null = null;
   private nextReaction = 0;
   private nextPlan = 0;
+  private nextDecision = 0;
+  private selectedGoal: Goal | null = null;
+  private readonly visited = new Map<string, number>();
+  private readonly blockedGoals = new Map<string, number>();
+  private recoveryUntil = 0;
+  private recoveryDirection = 1;
+  private nextRecovery = 0;
   private lastPlan = -1000;
   private pathIndex = 1;
   private goal: Vec2 | null = null;
@@ -27,87 +36,106 @@ export class BotController {
   private nextGrenade = 0;
   private defendUntil = 0;
   private rollNow = false;
-  private lastPosition: Vec2 | null = null;
   private lastWantedMotion = false;
   private progressAnchor: Vec2 | null = null;
-  private nextProgressCheck = 0;
+  private lastProgressTick = 0;
+  private navRevision = -1;
   private wasAlive = false;
+  private previousCombat: Fighter['combat'] | null = null;
 
   constructor(seed = 12345) { this.rng = new SeededRandom(seed); }
 
+  private isEnemy(world: World, fighter: Fighter, target: Fighter): boolean {
+    return target !== fighter && target.alive && (world.settings.mode !== 'team' || target.team !== fighter.team);
+  }
+
   private canSee(world: World, fighter: Fighter, target: Fighter): boolean {
-    const dx = target.x - fighter.x, dy = target.y - fighter.y;
-    const distance = Math.hypot(dx, dy);
-    if (distance > A.visionRange || !hasLineOfSight(world, fighter.x, fighter.y - 7, target.x, target.y - 7)) return false;
-    for (const prop of world.props) {
-      if (!prop.active || !prop.dynamic || prop.heldBy === fighter.id) continue;
-      let near = 0, far = 1;
-      for (const [origin, delta, min, max] of [[fighter.x, dx, prop.x - prop.width / 2, prop.x + prop.width / 2], [fighter.y - 7, dy, prop.y - prop.height / 2, prop.y + prop.height / 2]]) {
-        if (Math.abs(delta) < 0.0001) { if (origin < min || origin > max) { near = 2; break; } continue; }
-        const a = (min - origin) / delta, b = (max - origin) / delta;
-        near = Math.max(near, Math.min(a, b)); far = Math.min(far, Math.max(a, b));
-      }
-      if (near <= far && near < 0.99 && far > 0.01) return false;
-    }
-    return true;
+    if (fighter.combat.flashTicks > 0) return false;
+    return Math.hypot(target.x - fighter.x, target.y - fighter.y) <= A.visionRange
+      && !blocksVision(world, fighter.x, fighter.y - 7, target.x, target.y - 7);
   }
 
   private perceive(world: World, fighter: Fighter): void {
-    const visible = world.fighters.filter(target => target !== fighter && target.alive && target.team !== fighter.team && this.canSee(world, fighter, target));
-    visible.sort((a, b) => Math.hypot(a.x - fighter.x, a.y - fighter.y) - Math.hypot(b.x - fighter.x, b.y - fighter.y));
+    const difficulty = botDifficulty(fighter.difficulty);
+    const visible = world.fighters.filter(target => this.isEnemy(world, fighter, target) && this.canSee(world, fighter, target));
+    visible.sort((a, b) => Math.hypot(a.x - fighter.x, a.y - fighter.y) - Math.hypot(b.x - fighter.x, b.y - fighter.y) || a.id - b.id);
     const target = visible[0];
     if (target) {
       this.observed = { id: target.id, x: target.x, y: target.y, vx: target.vx, vy: target.vy, tick: world.tick };
       this.debug.targetId = target.id;
-      this.aimOffset = this.rng.range(-A.aimError, A.aimError);
+      this.aimOffset = this.rng.range(-difficulty.aimError, difficulty.aimError);
       const distance = Math.hypot(target.x - fighter.x, target.y - fighter.y);
-      if (distance < 80 && target.action === 'melee-windup') this.defendUntil = world.tick + 12;
-      this.rollNow = fighter.rollCooldown === 0 && target.action === 'shoot' && distance < 500 && this.rng.next() < 0.25;
+      if (distance < 80 && target.action === 'melee-windup' && this.rng.next() < difficulty.blockChance) this.defendUntil = world.tick + 12;
+      this.rollNow = fighter.rollCooldown === 0 && target.action === 'shoot' && distance < 500 && this.rng.next() < difficulty.rollChance;
     } else if (this.observed && world.tick - this.observed.tick > A.memoryTicks) {
       this.observed = null;
       this.debug.targetId = null;
     }
   }
 
-  private chooseGoal(world: World, fighter: Fighter, visible: boolean): { point: Vec2; key: string; label: string } | null {
+  private chooseGoal(world: World, fighter: Fighter, visible: boolean): Goal | null {
     const graph = world.navigation;
     if (!graph) return null;
-    const totalAmmo = [fighter.combat.primary, fighter.combat.sidearm].reduce((sum, id) => sum + fighter.combat.ammo[id] + fighter.combat.reserve[id], 0);
-    if (totalAmmo < 6) {
-      const supply = world.pickups.filter(item => item.active).sort((a, b) => Math.hypot(a.x - fighter.x, a.y - fighter.y) - Math.hypot(b.x - fighter.x, b.y - fighter.y))[0];
+    const distance = (point: Vec2): number => Math.hypot(point.x - fighter.x, point.y - fighter.y);
+    const available = world.pickups.filter(item => item.active && (this.blockedGoals.get(`pickup:${item.id}`) ?? 0) <= world.tick);
+    const nearest = (kind: (item: typeof world.pickups[number]) => boolean) => available.filter(kind).sort((a, b) => distance(a) - distance(b) || a.id - b.id)[0];
+    if (fighter.hp / fighter.maxHp < 0.55) {
+      const health = nearest(item => item.kind === 'health');
+      if (health) return { point: health, key: `pickup:${health.id}`, label: 'seek health' };
+    }
+    if (this.observed && fighter.hp / fighter.maxHp < A.fleeHealthRatio && visible) {
+      // Cover is assessed against the last observed position, never the hidden fighter's live position.
+      const target = this.observed;
+      const direction = Math.sign(fighter.x - target.x || fighter.facing);
+      if (this.goal && this.goalKey.startsWith('flee:') && distance(this.goal) > 45) return { point: this.goal, key: this.goalKey, label: 'retreat to cover' };
+      const candidates = [...graph.nodes.values()].filter(node => distance(node) > 90 && distance(node) < 520 && Math.sign(node.x - fighter.x) === direction);
+      const scored = candidates.map(node => ({ node, score: (blocksVision(world, target.x, target.y - 7, node.x, node.y - 7) ? 450 : 0)
+        + Math.hypot(node.x - target.x, node.y - target.y) - distance(node) * 0.3 }));
+      scored.sort((a, b) => b.score - a.score || a.node.id.localeCompare(b.node.id));
+      for (const { node } of scored.slice(0, 6)) if (graph.findPath(fighter, node).length) return { point: node, key: `flee:${node.id}`, label: 'retreat to cover' };
+    }
+    const ammo = (id: string): number => (fighter.combat.ammo[id] ?? 0) + (fighter.combat.reserve[id] ?? 0);
+    if (ammo(fighter.combat.primary) + ammo(fighter.combat.sidearm) < 6) {
+      const supply = nearest(item => item.kind === 'ammo' || WEAPONS[item.weapon]?.kind === 'gun');
       if (supply) return { point: supply, key: `pickup:${supply.id}`, label: 'seek ammunition' };
     }
-    if (this.observed) {
-      const target = this.observed;
-      if (fighter.hp / fighter.maxHp < A.fleeHealthRatio && visible) {
-        const desiredX = fighter.x + Math.sign(fighter.x - target.x || fighter.facing) * 400;
-        const node = graph.nearest(desiredX, fighter.y);
-        if (node) return { point: node, key: `flee:${node.id}`, label: 'retreat to cover' };
-      }
-      return { point: target, key: `enemy:${target.id}`, label: visible ? 'engage' : 'last seen / cover' };
-    }
-    const pickups = world.pickups.filter(item => item.active);
-    pickups.sort((a, b) => Math.hypot(a.x - fighter.x, a.y - fighter.y) - Math.hypot(b.x - fighter.x, b.y - fighter.y));
+    if (this.observed) return { point: this.observed, key: `enemy:${this.observed.id}`, label: visible ? 'engage' : 'last seen / cover' };
+    const pickups = available.filter(item => item.kind !== 'health' && item.kind !== 'ammo'
+      && (this.visited.get(`pickup:${item.id}`) ?? -Infinity) + 300 < world.tick);
+    pickups.sort((a, b) => distance(a) - distance(b) || a.id - b.id);
     for (const pickup of pickups.slice(0, 4)) {
-      if (Math.hypot(pickup.x - fighter.x, pickup.y - fighter.y) < 900) return { point: pickup, key: `pickup:${pickup.id}`, label: 'seek weapon' };
+      if (distance(pickup) < A.visionRange) return { point: pickup, key: `pickup:${pickup.id}`, label: 'seek weapon' };
     }
-    if (this.goal && this.goalKey.startsWith('patrol:') && Math.hypot(this.goal.x - fighter.x, this.goal.y - fighter.y) > 40) return { point: this.goal, key: this.goalKey, label: 'patrol' };
-    const candidates = [...graph.nodes.values()].filter(node => Math.hypot(node.x - fighter.x, node.y - fighter.y) > 160 && Math.hypot(node.x - fighter.x, node.y - fighter.y) < 800);
-    const node = candidates.length ? this.rng.pick(candidates) : graph.nearest(fighter.x + 200, fighter.y);
+    if (this.goal && this.goalKey.startsWith('patrol:') && distance(this.goal) > 40
+      && (this.blockedGoals.get(this.goalKey) ?? 0) <= world.tick) return { point: this.goal, key: this.goalKey, label: 'patrol' };
+    if (this.goalKey.startsWith('patrol:')) this.visited.set(this.goalKey, world.tick);
+    const candidates = [...graph.nodes.values()].filter(node => distance(node) > 160 && distance(node) < 800
+      && (this.blockedGoals.get(`patrol:${node.id}`) ?? 0) <= world.tick);
+    // Prefer unvisited sections. A seeded tie breaker keeps repeated matches reproducible.
+    const scored = candidates.map(node => ({ node, score: (this.visited.get(`patrol:${node.id}`) ?? -10000) + this.rng.next() * 240 }));
+    scored.sort((a, b) => a.score - b.score || a.node.id.localeCompare(b.node.id));
+    for (const { node } of scored.slice(0, 8)) if (graph.findPath(fighter, node).length) return { point: node, key: `patrol:${node.id}`, label: 'patrol' };
+    const node = graph.nearest(fighter.x + 200 * fighter.facing, fighter.y);
     return node ? { point: node, key: `patrol:${node.id}`, label: 'patrol' } : null;
   }
 
-  private plan(world: World, fighter: Fighter, goal: { point: Vec2; key: string; label: string }): void {
+  private plan(world: World, fighter: Fighter, goal: Goal): void {
     this.debug.goal = goal.label;
     const changed = goal.key !== this.goalKey;
     this.goal = { x: goal.point.x, y: goal.point.y };
     this.goalKey = goal.key;
     if (world.tick - this.lastPlan < 12 || (!changed && world.tick < this.nextPlan)) return;
+    const previous = world.navigation!.nodes.get(this.debug.path[Math.max(0, this.pathIndex - 1)]);
+    const traversal = previous?.edges.find(edge => edge.to === this.debug.path[this.pathIndex]);
+    // An airborne fighter is not standing on the closest upper node yet. Finish the physical arc.
+    if (!fighter.grounded && !fighter.climbing && !fighter.ledge && this.navRevision === world.navigation!.revision
+      && ['jump', 'ledge', 'drop'].includes(traversal?.kind ?? '')) return;
     const path = world.navigation!.findPath(fighter, this.goal);
     this.debug.path = path.map(node => node.id);
     this.pathIndex = path.length > 1 ? 1 : 0;
     this.lastPlan = world.tick;
-    this.nextPlan = world.tick + A.replanTicks;
+    this.nextPlan = world.tick + botDifficulty(fighter.difficulty).replanTicks;
+    this.navRevision = world.navigation!.revision;
   }
 
   private navigate(world: World, fighter: Fighter, command: InputCommand): NavEdge | undefined {
@@ -143,8 +171,7 @@ export class BotController {
     if (fighter.climbing && edge?.kind !== 'climb') {
       // Replanning can choose the upper surface before the climber has cleared its opening.
       // Finish at the navigation surface, not the pickup's floating display position.
-      const ladder = world.arena.props.find(prop => (prop.type === 'ladder' || prop.type === 'rope') && Math.abs(fighter.x - prop.x - prop.width / 2) < prop.width / 2 + 12 && fighter.y > prop.y - fighter.height && fighter.y < prop.y + prop.height + fighter.height);
-      const upward = ladder ? destination.y <= ladder.y + ladder.height / 2 : destination.y < fighter.y;
+      const upward = destination.y < fighter.y;
       const cleared = upward ? fighter.y <= destination.y - 4 : fighter.y >= destination.y - 3;
       if (cleared) { command.moveY = 0; command.moveX = Math.sign(dx || fighter.facing); }
       else { command.moveX = 0; command.moveY = upward ? -1 : 1; }
@@ -152,78 +179,129 @@ export class BotController {
     return edge;
   }
 
+  /** Avoid firing through a teammate, including when friendly fire is enabled. */
+  private allyInLine(world: World, fighter: Fighter, aimX: number, aimY: number, range: number): boolean {
+    if (world.settings.mode !== 'team') return false;
+    return world.fighters.some(ally => {
+      if (ally === fighter || !ally.alive || ally.team !== fighter.team) return false;
+      const dx = ally.x - fighter.x, dy = ally.y - fighter.y;
+      const along = dx * aimX + dy * aimY;
+      const spread = WEAPONS[equippedWeapon(fighter.combat)]?.spread ?? 0;
+      return along > 0 && along < range && Math.abs(dx * aimY - dy * aimX) < Math.max(ally.width, ally.height) / 2 + 5 + Math.tan(spread) * along * 1.5;
+    });
+  }
+
   command(world: World, fighter: Fighter): InputCommand {
     const command = neutralInput();
+    const difficulty = botDifficulty(fighter.difficulty);
     if (!fighter.alive) { this.wasAlive = false; return command; }
+    // World skips dead bots; a new combat state identifies respawns even without a dead command tick.
+    if (this.previousCombat !== fighter.combat) { this.previousCombat = fighter.combat; this.wasAlive = false; }
     if (!this.wasAlive) {
       this.wasAlive = true; this.observed = null; this.debug.targetId = null;
-      this.nextReaction = world.tick + A.reactionTicks; this.nextPlan = 0;
-      this.lastPosition = { x: fighter.x, y: fighter.y }; this.debug.stuckTicks = 0;
-      this.progressAnchor = { x: fighter.x, y: fighter.y }; this.nextProgressCheck = world.tick + 60;
+      this.nextReaction = world.tick + difficulty.reactionTicks; this.nextPlan = 0; this.nextDecision = 0;
+      this.selectedGoal = null; this.goal = null; this.goalKey = ''; this.debug.path = [];
+      this.debug.stuckTicks = 0; this.lastWantedMotion = false;
+      this.progressAnchor = { x: fighter.x, y: fighter.y }; this.lastProgressTick = world.tick;
+      this.cookUntil = 0; this.defendUntil = 0; this.rollNow = false; this.recoveryUntil = 0;
     }
-    if (world.tick >= this.nextReaction) { this.perceive(world, fighter); this.nextReaction = world.tick + A.reactionTicks; }
-    const target = this.observed ? world.fighters.find(other => other.id === this.observed!.id && other.alive) : undefined;
+    if (world.tick >= this.nextReaction) { this.perceive(world, fighter); this.nextReaction = world.tick + difficulty.reactionTicks; }
+    const target = this.observed ? world.fighters.find(other => other.id === this.observed!.id && this.isEnemy(world, fighter, other)) : undefined;
     const visible = Boolean(target && this.canSee(world, fighter, target));
-    if (!target && this.observed) { this.observed = null; this.debug.targetId = null; }
-    const goal = this.chooseGoal(world, fighter, visible);
-    if (goal) this.plan(world, fighter, goal);
+    if (!target && this.observed) { this.observed = null; this.debug.targetId = null; this.nextDecision = world.tick; }
+    if (world.tick >= this.nextDecision || world.navigation?.revision !== this.navRevision) {
+      this.selectedGoal = this.chooseGoal(world, fighter, visible);
+      this.nextDecision = world.tick + difficulty.decisionTicks;
+    }
+    if (this.selectedGoal) this.plan(world, fighter, this.selectedGoal);
     const edge = this.navigate(world, fighter, command);
 
-    if (this.observed) {
+    if (this.observed && fighter.combat.flashTicks === 0) {
       const observed = this.observed;
       const distance = Math.hypot(observed.x - fighter.x, observed.y - fighter.y);
-      const lead = Math.min(0.055, distance / 15000);
-      const aimAngle = Math.atan2(observed.y - fighter.y + observed.vy * lead, observed.x - fighter.x + observed.vx * lead) + this.aimOffset;
-      command.aimX = Math.cos(aimAngle); command.aimY = Math.sin(aimAngle);
       const weapon = WEAPONS[equippedWeapon(fighter.combat)];
-      const hasAmmo = (id: string): boolean => fighter.combat.ammo[id] + fighter.combat.reserve[id] > 0;
+      // Physical projectiles lead the observed velocity. Hitscan weapons retain Normal's slight lead.
+      const speed = weapon?.projectileSpeed ?? 0;
+      let lead = speed > 0 ? Math.min(0.85, distance / speed) : Math.min(0.055, distance / 15000);
+      if (speed > 0) lead = Math.min(0.85, Math.hypot(observed.x - fighter.x + observed.vx * lead, observed.y - fighter.y + observed.vy * lead) / speed);
+      const aimAngle = Math.atan2(observed.y - fighter.y + observed.vy * lead - (weapon?.projectileGravity ?? 0) * lead * lead / 2, observed.x - fighter.x + observed.vx * lead) + this.aimOffset;
+      command.aimX = Math.cos(aimAngle); command.aimY = Math.sin(aimAngle);
+      const hasAmmo = (id: string): boolean => (fighter.combat.ammo[id] ?? 0) + (fighter.combat.reserve[id] ?? 0) > 0;
       const currentAmmo = hasAmmo(equippedWeapon(fighter.combat));
       if (visible && Math.abs(observed.y - fighter.y) < 65) {
-        if (this.debug.goal === 'engage' && weapon?.kind === 'gun' && currentAmmo && distance > 65 && distance < A.preferredRange) command.moveX = 0;
-        if (distance < 46) { command.attack = world.tick % 23 === 0; command.moveX = Math.sign(observed.x - fighter.x); }
-        else if (weapon?.kind === 'gun') command.shoot = distance < weapon.range * 0.92;
+        if (this.debug.goal === 'engage' && weapon?.kind === 'gun' && currentAmmo && distance > 65 && distance < Math.min(A.preferredRange, weapon.range * 0.75)) command.moveX = 0;
+        const meleeRange = fighter.combat.equipped === 'melee' ? Math.max(46, Math.min(95, weapon?.range ?? 46)) : 46;
+        if (distance < meleeRange) { command.attack = world.tick % difficulty.attackIntervalTicks === 0; command.moveX = Math.sign(observed.x - fighter.x); }
+        else if (weapon?.kind === 'gun') command.shoot = currentAmmo && distance < weapon.range * 0.92;
         if (distance < 65 && this.defendUntil > world.tick) { command.block = true; command.attack = false; }
         if (this.rollNow && fighter.grounded) { command.roll = true; this.rollNow = false; }
-      } else if (visible && weapon?.kind === 'gun') command.shoot = distance < weapon.range * 0.9;
-      if ((fighter.combat.equipped === 'melee' && distance > 75) || (weapon?.kind === 'gun' && !currentAmmo)) {
+      } else if (visible && weapon?.kind === 'gun') command.shoot = currentAmmo && distance < weapon.range * 0.9;
+      if ((fighter.combat.equipped === 'melee' && distance > 95) || (weapon?.kind === 'gun' && !currentAmmo)) {
         const slot = hasAmmo(fighter.combat.primary) ? 2 : hasAmmo(fighter.combat.sidearm) ? 3 : 4;
         command.switchWeapon = world.tick % 2 === 0 ? slot : 0;
       }
+      // Grenades only target a recent actual sighting; unseen enemies cannot be located through walls.
       if (!visible && distance > 120 && distance < 650 && fighter.combat.throwableCount > 0 && world.tick >= this.nextGrenade && world.tick - observed.tick < A.memoryTicks) {
-        this.cookUntil = world.tick + A.grenadeCookTicks; this.nextGrenade = world.tick + A.grenadeCooldownTicks;
+        this.nextGrenade = world.tick + difficulty.grenadeCooldownTicks;
+        if (this.rng.next() < difficulty.grenadeChance) this.cookUntil = world.tick + A.grenadeCookTicks;
       }
-      if (world.tick < this.cookUntil) { command.throw = true; command.aimY = Math.min(-0.32, command.aimY); command.shoot = false; }
+      if (world.tick < this.cookUntil) {
+        command.throw = true; command.aimY = Math.min(-0.55, command.aimY); command.shoot = false;
+        const length = Math.hypot(command.aimX, command.aimY); command.aimX /= length; command.aimY /= length;
+      }
+      if (fighter.combat.specialMeter >= 100 && visible && distance < (fighter.special === 'slam' ? 140 : 650)) command.special = true;
+      if (this.allyInLine(world, fighter, command.aimX, command.aimY, distance)) { command.shoot = false; command.attack = false; }
+      if (weapon?.blastRadius && distance < weapon.blastRadius * 1.15) command.shoot = false;
+      if (world.settings.mode === 'team' && world.fighters.some(ally => ally !== fighter && ally.alive && ally.team === fighter.team
+        && Math.hypot(ally.x - observed.x, ally.y - observed.y) < Math.max(135, weapon?.blastRadius ?? 0))) {
+        command.throw = false;
+        if (weapon?.blastRadius) command.shoot = false;
+      }
     } else {
-      command.aimX = command.moveX < 0 ? -1 : 1; command.aimY = 0;
+      command.aimX = fighter.combat.flashTicks > 0 ? fighter.facing : command.moveX < 0 ? -1 : 1; command.aimY = 0;
     }
 
-    const pickup = world.pickups.find(item => item.active && Math.hypot(item.x - fighter.x, item.y - fighter.y) < 43);
+    const pickup = world.pickups.find(item => item.active && Math.hypot(item.x - fighter.x, item.y - fighter.y) < 43
+      && (item.kind !== 'health' || fighter.hp < fighter.maxHp));
     if (pickup && world.tick % 18 === 0) command.interact = true;
-    if (fighter.combat.heldProp !== null || fighter.combat.grabTarget !== null) command.attack = world.tick % 2 === 0;
+    if (fighter.combat.heldProp !== null || fighter.combat.grabTarget !== null) {
+      command.attack = world.tick % 2 === 0;
+      if (fighter.combat.heldProp !== null && !visible) { command.aimX = fighter.facing * 0.8; command.aimY = -0.6; }
+    }
 
-    const danger = world.projectiles.find(projectile => projectile.active && projectile.kind === 'grenade' && projectile.life < 75 && Math.hypot(projectile.x - fighter.x, projectile.y - fighter.y) < A.hazardRange);
-    const barrel = world.props.find(prop => prop.active && prop.type === 'barrel' && prop.hp < prop.maxHp && Math.hypot(prop.x - fighter.x, prop.y - fighter.y) < 150);
-    if (danger || barrel) {
-      const hazard = danger ?? barrel!;
-      this.debug.goal = 'avoid blast'; command.moveX = Math.sign(fighter.x - hazard.x || fighter.facing);
+    const noticed = (point: Vec2): boolean => fighter.combat.flashTicks === 0
+      && !blocksVision(world, fighter.x, fighter.y - 7, point.x, point.y);
+    const danger = world.projectiles.find(projectile => projectile.active
+      && ((projectile.kind === 'grenade' && (projectile.life < 75 || projectile.weapon === 'sticky-mine' || projectile.weapon === 'molotov')) || projectile.kind === 'mine' || projectile.kind === 'rocket' || projectile.kind === 'molotov')
+      && Math.hypot(projectile.x - fighter.x, projectile.y - fighter.y) < A.hazardRange && noticed(projectile));
+    const barrel = world.props.find(prop => prop.active && prop.type === 'barrel' && prop.hp < prop.maxHp
+      && Math.hypot(prop.x - fighter.x, prop.y - fighter.y) < 150 && noticed(prop));
+    const fire = [...world.fire.cells.values()].find(cell => Math.hypot(cell.x - fighter.x, cell.y - fighter.y) < 65
+      && Math.abs(cell.y - fighter.y) < fighter.height + world.terrain.tileSize);
+    const falling = world.structures.chunks.find(chunk => chunk.active && chunk.vy > 180 && Math.abs(chunk.x - fighter.x) < 60 && chunk.y < fighter.y && fighter.y - chunk.y < 160);
+    const hazard = fire ?? danger ?? barrel ?? falling;
+    if (hazard) {
+      this.debug.goal = fire ? 'avoid fire' : falling ? 'avoid falling structure' : danger?.weapon === 'sticky-mine' || danger?.kind === 'mine' ? 'avoid mine' : 'avoid blast';
+      command.moveX = Math.sign(fighter.x - hazard.x || fighter.facing); command.moveY = 0; command.block = false;
       if (fighter.grounded && fighter.rollCooldown === 0) command.roll = true;
-      if (danger && danger.life < 22 && fighter.grounded && world.tick >= this.nextJump) { this.jumpUntil = world.tick + 16; this.nextJump = world.tick + 35; }
+      if ((fire || (danger && danger.life < 22)) && fighter.grounded && world.tick >= this.nextJump) { this.jumpUntil = world.tick + 16; this.nextJump = world.tick + 35; }
     }
     if (world.tick < this.jumpUntil && edge?.kind !== 'climb') command.jump = true;
     if (fighter.ledge) command.moveY = -1;
 
-    if (this.lastPosition && this.lastWantedMotion && Math.hypot(fighter.x - this.lastPosition.x, fighter.y - this.lastPosition.y) < 0.4 && fighter.combat.stunTicks === 0) this.debug.stuckTicks++;
-    else if (Math.hypot(fighter.vx, fighter.vy) > 50) this.debug.stuckTicks = Math.max(0, this.debug.stuckTicks - 3);
-    if (world.tick >= this.nextProgressCheck) {
-      if (this.progressAnchor && this.lastWantedMotion && Math.hypot(fighter.x - this.progressAnchor.x, fighter.y - this.progressAnchor.y) < 18) this.debug.stuckTicks += 60;
-      this.progressAnchor = { x: fighter.x, y: fighter.y }; this.nextProgressCheck = world.tick + 60;
-    }
+    // Only count real, continuous failure to travel. Standing to shoot and hitstun are not stuck.
+    if (!this.lastWantedMotion || fighter.combat.stunTicks > 0 || !this.progressAnchor
+      || Math.abs(fighter.x - this.progressAnchor.x) >= 28
+      || ((fighter.grounded || fighter.climbing) && Math.abs(fighter.y - this.progressAnchor.y) >= 28)) {
+      this.progressAnchor = { x: fighter.x, y: fighter.y }; this.lastProgressTick = world.tick;
+      this.debug.stuckTicks = 0;
+    } else this.debug.stuckTicks = world.tick - this.lastProgressTick;
     const frontX = fighter.x + Math.sign(command.moveX || fighter.facing) * (fighter.width / 2 + 7);
     const wallAhead = world.terrain.atPixel(frontX, fighter.y) > 0;
     if (wallAhead && edge?.kind !== 'climb' && fighter.grounded && world.tick >= this.nextJump) { this.jumpUntil = world.tick + A.jumpHoldTicks; this.nextJump = world.tick + 50; command.jump = true; }
     if (this.debug.stuckTicks > A.stuckRecoverTicks) {
       this.debug.goal = 'clear blocked route';
-      command.attack = world.tick % 23 === 0;
+      command.attack = world.tick % difficulty.attackIntervalTicks === 0;
       command.aimX = Math.sign(command.moveX || fighter.facing); command.aimY = 0;
       command.shoot = wallAhead && fighter.combat.equipped !== 'melee';
       this.nextPlan = Math.min(this.nextPlan, world.tick + 1);
@@ -244,8 +322,32 @@ export class BotController {
         else if (!landing) command.moveX = 0;
       }
     }
-    this.lastWantedMotion = Math.abs(command.moveX) > 0.1 || Math.abs(command.moveY) > 0.1;
-    this.lastPosition = { x: fighter.x, y: fighter.y };
+    if (this.debug.stuckTicks > 10 * TUNING.tickRate && world.tick >= this.nextRecovery) {
+      // Repair the affected standing columns, abandon an unreachable goal, then use ordinary movement.
+      const col = Math.floor(fighter.x / world.terrain.tileSize), row = Math.floor((fighter.y + fighter.height / 2) / world.terrain.tileSize);
+      world.navigation?.repair([{ col, row }]);
+      this.blockedGoals.set(this.goalKey, world.tick + 600);
+      this.selectedGoal = null; this.goal = null; this.goalKey = ''; this.debug.path = [];
+      this.nextDecision = world.tick; this.nextPlan = world.tick;
+      this.recoveryDirection = -Math.sign(command.moveX || fighter.facing);
+      this.recoveryUntil = world.tick + 40; this.nextRecovery = world.tick + 120;
+      this.progressAnchor = { x: fighter.x, y: fighter.y }; this.lastProgressTick = world.tick;
+    }
+    if (world.tick < this.recoveryUntil) {
+      this.debug.goal = 'recover blocked route'; command.moveX = this.recoveryDirection;
+      command.moveY = fighter.ledge || fighter.climbing ? 1 : 0;
+      command.jump = fighter.grounded || world.tick < this.jumpUntil;
+      command.block = false;
+    }
+    if (fighter.combat.flashTicks > 0) {
+      command.shoot = command.attack = command.throw = command.special = false;
+      command.aimX = fighter.facing; command.aimY = 0;
+    }
+    if (this.allyInLine(world, fighter, command.aimX, command.aimY, this.observed ? Math.hypot(this.observed.x - fighter.x, this.observed.y - fighter.y) : 300)) command.shoot = false;
+    const standingNode = fighter.grounded ? world.navigation?.nearest(fighter.x, fighter.y) : undefined;
+    if (standingNode) this.visited.set(`patrol:${standingNode.id}`, world.tick);
+    const waitingForPickup = this.goalKey.startsWith('pickup:') && world.pickups.some(item => item.active && this.goalKey === `pickup:${item.id}`);
+    this.lastWantedMotion = Math.abs(command.moveX) > 0.1 || Math.abs(command.moveY) > 0.1 || command.jump || waitingForPickup;
     return command;
   }
 }

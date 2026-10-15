@@ -3,7 +3,7 @@ import {mkdir} from 'node:fs/promises';
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
 try{
  const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto(process.env.TEST_URL||'http://127.0.0.1:5173');
+ await page.goto(process.env.TEST_URL||'http://127.0.0.1:5173/?quick');
  await page.waitForFunction(()=>window.__RIVETFALL__?.world.tick>3);
  const initial=await page.evaluate(()=>window.__RIVETFALL__.world.fighters.map(f=>({id:f.id,x:f.x,y:f.y})));
  await page.waitForFunction(()=>window.__RIVETFALL__.world.tick>=150,null,{timeout:60000});

@@ -13,11 +13,12 @@ try {
  const hasCombat=await page.evaluate(()=>window.__RIVETFALL__.world.fighters.length>1);
  let combat=null;
  if(hasCombat){
+   const targetBefore=await page.evaluate(()=>window.__RIVETFALL__.world.fighters[1].hp);
    await page.keyboard.down('k');
-   await page.waitForFunction(()=>window.__RIVETFALL__.world.fighters[1].hp<100);
+   await page.waitForFunction(hp=>window.__RIVETFALL__.world.fighters[1].hp<hp,targetBefore);
    await page.keyboard.up('k');
    combat=await page.evaluate(()=>({targetHp:window.__RIVETFALL__.world.fighters[1].hp,shots:window.__RIVETFALL__.world.fighters[0].combat.shots}));
-   if(!(combat.targetHp<100&&combat.shots>0))throw Error('Combat input did not damage the second fighter');
+   if(!(combat.targetHp<targetBefore&&combat.shots>0))throw Error('Combat input did not damage the second fighter');
    const secondX=await page.evaluate(()=>{
      Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[{index:0,connected:true,axes:[-1,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))}]});
      return window.__RIVETFALL__.world.fighters[1].x;

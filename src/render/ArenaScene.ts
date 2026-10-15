@@ -8,6 +8,8 @@ import { CombatView } from './CombatView';
 import { TerrainView } from './TerrainView';
 import { PropsView } from './PropsView';
 import { BotDebugView } from './BotDebugView';
+import { drawBackdrop } from './Backdrop';
+import { WorldEffectsView } from './WorldEffectsView';
 
 interface Particle { active: boolean; x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: number }
 
@@ -30,6 +32,7 @@ export class ArenaScene extends Phaser.Scene {
   private combatView!: CombatView;
   private propsView!: PropsView;
   private botDebugView!: BotDebugView;
+  public worldEffectsView!: WorldEffectsView;
 
   constructor(public world: World, private readonly getCommands: () => Record<number, InputCommand>) {
     super({ key: 'ArenaScene' });
@@ -38,15 +41,17 @@ export class ArenaScene extends Phaser.Scene {
   preload(): void { AssetLibrary.preload(this); }
 
   create(): void {
+    this.accumulator=0;this.visualTime=0;this.nextParticle=0;
+    for(const particle of this.particles)particle.active=false;
     AssetLibrary.create(this);
     this.cameras.main.setBackgroundColor('#111c26');
-    this.drawBackdrop();
+    drawBackdrop(this,this.world.arena);
     this.terrainView = new TerrainView(this, this.world.terrain);
-    this.drawProps();
     this.effectsArt = this.add.graphics().setDepth(30);
     this.combatView = new CombatView(this, this.world);
     this.propsView = new PropsView(this, this.world);
     this.botDebugView = new BotDebugView(this,this.world);
+    this.worldEffectsView=new WorldEffectsView(this,this.world);
     this.debugArt = this.add.graphics().setDepth(45);
     this.debugText = this.add.text(16, 16, '', {
       fontFamily: 'monospace', fontSize: '12px', color: '#c8ffee', backgroundColor: '#0d1825', padding: {x:12,y:10},
@@ -69,7 +74,9 @@ export class ArenaScene extends Phaser.Scene {
       this.terrainView.destroy();
       this.propsView.destroy();
       this.botDebugView.destroy();
+      this.worldEffectsView.destroy();
     });
+    this.updateCamera(true);
     this.terrainView.update(this.cameras.main);
   }
 
@@ -80,7 +87,7 @@ export class ArenaScene extends Phaser.Scene {
       this.accumulator += elapsed;
       const fixedMs = 1000 / TUNING.tickRate;
       let steps = 0;
-      while (this.accumulator >= fixedMs && steps < TUNING.performance.maxFrameSteps) {
+      while (!this.paused && this.accumulator >= fixedMs && steps < TUNING.performance.maxFrameSteps) {
         const began = performance.now();
         this.world.step(this.getCommands());
         if (performance.now() - began > TUNING.performance.simWarningMs && this.world.tick % 120 === 0) {
@@ -107,6 +114,7 @@ export class ArenaScene extends Phaser.Scene {
     this.terrainView.update(this.cameras.main);
     this.propsView.update(this.visualTime,this.debug);
     this.botDebugView.update(this.navDebug);
+    this.worldEffectsView.update(this.visualTime);
     this.drawDebug();
   }
 
@@ -138,77 +146,6 @@ export class ArenaScene extends Phaser.Scene {
       this.focusY = Phaser.Math.Linear(this.focusY, targetY, lerp);
     }
     camera.centerOn(this.focusX, this.focusY);
-  }
-
-  private drawBackdrop(): void {
-    const arena = this.world.arena;
-    const width = arena.width * arena.tileSize; const height = arena.height * arena.tileSize;
-    const far = this.add.graphics().setDepth(-20).setScrollFactor(0.65);
-    far.fillStyle(0x131f29).fillRect(-1000, -1000, width + 3000, height + 2500);
-    for (let x = -300; x < width + 900; x += 320) {
-      const y = 190 + ((x + 300) / 320 % 3) * 32;
-      far.fillStyle(0x20343b).fillRect(x, y, 206, 320);
-      far.fillStyle(0x29444a).fillRect(x + 6, y + 6, 194, 148);
-      far.fillStyle(0x243b42).fillRect(x + 6, y + 162, 194, 148);
-      far.fillStyle(0x172830);
-      for (let bar = 1; bar < 4; bar++) far.fillRect(x + bar * 51, y, 6, 320);
-      far.fillRect(x, y + 154, 206, 8);
-      far.fillStyle(0x759389, 0.05).fillTriangle(x, y + 320, x + 205, y + 320, x + 440, height);
-    }
-    const structure = this.add.graphics().setDepth(-10);
-    structure.fillStyle(0x17262e).fillRect(-200, height - 320, width + 400, 350);
-    structure.lineStyle(1, 0x26363d, 0.6);
-    for (let y = 450; y < height; y += 60) structure.lineBetween(0, y, width, y);
-    for (let x = 72; x < width; x += 432) {
-      structure.fillStyle(0x111f29).fillRect(x, 60, 28, height - 100);
-      structure.fillStyle(0x2a3b40).fillRect(x, 60, 5, height - 100).fillRect(x + 24, 60, 4, height - 100);
-      structure.fillStyle(0x24363c).fillRect(x, 230, 28, 28).fillRect(x, 570, 28, 28);
-      structure.lineStyle(11, 0x1d2f36).lineBetween(x + 28, 250, x + 432, 560).lineBetween(x + 28, 560, x + 432, 250);
-      structure.lineStyle(2, 0x32464a, 0.45).lineBetween(x + 28, 247, x + 432, 557);
-      for (const y of [238, 578]) { structure.fillStyle(0x65716b, 0.5).fillCircle(x + 8, y, 2).fillCircle(x + 20, y, 2); }
-    }
-    structure.fillStyle(0x2c3e44).fillRect(0, 298, width, 14);
-    structure.fillStyle(0x0d1c25).fillRect(0, 312, width, 9);
-    structure.lineStyle(3, 0x485448, 0.4).lineBetween(0, 300, width, 300);
-    // Warm practical lights and restrained cones make the cold factory feel inhabited.
-    const light = this.add.graphics().setDepth(-5);
-    for (let x = 300; x < width; x += 590) {
-      const y = 335 + (Math.floor(x / 590) % 2) * 60;
-      light.lineStyle(2, 0x0b171e).lineBetween(x, 100, x, y);
-      light.fillStyle(0xf5c889, 0.035).fillTriangle(x - 8, y + 6, x - 180, y + 440, x + 180, y + 440);
-      light.fillStyle(0xf5c889, 0.025).fillTriangle(x + 8, y + 6, x - 120, y + 390, x + 120, y + 390);
-      light.fillStyle(0x0a1720).fillTriangle(x, y - 15, x - 30, y + 6, x + 30, y + 6);
-      light.fillStyle(0x46504a).fillRect(x - 30, y + 5, 60, 5);
-      light.fillStyle(0xffd799).fillRect(x - 22, y + 10, 44, 3);
-    }
-    this.add.text(410, 415, 'IRONWORKS', {fontFamily:'Arial Black, sans-serif',fontStyle:'bold',fontSize:'74px',color:'#3a514f',letterSpacing:7}).setAlpha(0.65).setDepth(-7);
-    this.add.text(417, 500, 'F O U N D R Y   D I S T R I C T    /    E S T .  2 0 8 4', {fontFamily:'monospace',fontSize:'12px',color:'#6c8173'}).setAlpha(0.5).setDepth(-7);
-    for (let x = 140; x < width; x += 860) {
-      this.add.text(x, height - 225, '07', {fontFamily:'Arial Black, sans-serif',fontStyle:'bold',fontSize:'83px',color:'#344740'}).setDepth(-5).setAlpha(0.65);
-      const sign = this.add.graphics().setDepth(-5);
-      sign.fillStyle(0xc2924f, 0.45).fillRect(x + 4, height - 126, 95, 3);
-      this.add.text(x + 4, height - 115, 'CAUTION / ACTIVE SITE', {fontFamily:'monospace',fontSize:'8px',color:'#8c8d67'}).setDepth(-5);
-    }
-  }
-
-  private drawProps(): void {
-    const g = this.add.graphics().setDepth(8);
-    for (const prop of this.world.arena.props) {
-      if (prop.type === 'ladder') {
-        g.lineStyle(4, 0x17252a).lineBetween(prop.x + 3, prop.y, prop.x + 3, prop.y + prop.height).lineBetween(prop.x + prop.width - 1, prop.y, prop.x + prop.width - 1, prop.y + prop.height);
-        g.lineStyle(3, 0xac8d60).lineBetween(prop.x + 1, prop.y, prop.x + 1, prop.y + prop.height).lineBetween(prop.x + prop.width - 3, prop.y, prop.x + prop.width - 3, prop.y + prop.height);
-        for (let y = prop.y + 8; y < prop.y + prop.height; y += 15) {
-          g.lineStyle(3, 0x796b52).lineBetween(prop.x + 2, y + 2, prop.x + prop.width - 3, y + 2);
-          g.lineStyle(2, 0xbba37b).lineBetween(prop.x + 2, y, prop.x + prop.width - 3, y);
-        }
-      } else if (prop.type === 'rope') {
-        const center = prop.x + prop.width / 2;
-        g.lineStyle(4, 0x423f33).lineBetween(center + 1, prop.y, center + 1, prop.y + prop.height);
-        g.lineStyle(2, 0xc2b68c).lineBetween(center, prop.y, center, prop.y + prop.height);
-        for (let y = prop.y; y < prop.y + prop.height; y += 12) g.fillStyle(0x837c5b).fillRect(center - 2, y, 4, 3);
-        g.fillStyle(0xb5a17a).fillCircle(center, prop.y + prop.height, 4);
-      }
-    }
   }
 
   private visualEvent(event: SimEvent): void {
@@ -251,7 +188,6 @@ export class ArenaScene extends Phaser.Scene {
       g.lineStyle(2, 0xffb66d).lineBetween(fighter.x, fighter.y, fighter.x + fighter.vx * 0.15, fighter.y + fighter.vy * 0.15);
       if (fighter.ledge) g.fillStyle(0xff8f9a).fillCircle(fighter.ledge.x, fighter.ledge.y, 4);
     }
-    for (const prop of this.world.arena.props) if (prop.type === 'ladder' || prop.type === 'rope') g.lineStyle(1, 0x77c5e5, 0.5).strokeRect(prop.x, prop.y, prop.width, prop.height);
     for (const hitbox of this.world.hitboxes) g.lineStyle(1, 0xff705c).strokeRect(hitbox.x-hitbox.width/2,hitbox.y-hitbox.height/2,hitbox.width,hitbox.height);
     const first = this.world.fighters[0];
     const terrain=this.terrainView.stats;

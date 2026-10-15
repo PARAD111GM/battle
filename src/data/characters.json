@@ -1,0 +1,6 @@
+[
+  {"id":"rivet","name":"Rivet","role":"Brawler","hp":110,"speedScale":0.97,"special":"slam","color":16758605,"description":"A scrapyard bruiser. Ground Slam sends a shockwave through nearby fighters and cover."},
+  {"id":"flux","name":"Flux","role":"Gunslinger","hp":95,"speedScale":1.02,"special":"bullet-time","color":6873823,"description":"A precise outlaw. Bullet Time slows nearby opponents while Flux keeps moving."},
+  {"id":"cinder","name":"Cinder","role":"Demolitions","hp":105,"speedScale":0.95,"special":"air-strike","color":16739177,"description":"A reckless explosives expert. Air Strike rains blasts onto the aimed area."},
+  {"id":"wisp","name":"Wisp","role":"Scout","hp":90,"speedScale":1.1,"special":"shield-wall","color":11115519,"description":"An agile recon runner. Shield Wall creates temporary cover in front of the team."}
+]

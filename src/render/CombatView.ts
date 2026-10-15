@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import type { World } from '../sim/World';
 import type { SimEvent } from '../sim/types';
-import { GRENADE } from '../data/combat';
+import { GRENADE, THROWABLES } from '../data/combat';
+import { WEAPONS } from '../sim/weapons/definitions';
+import { drawWeaponArt, drawThrowableArt } from './WeaponArt';
 
 interface Effect { active: boolean; kind: 'trace'|'ring'|'flash'|'spark'; x: number; y: number; endX: number; endY: number; life: number; duration: number; radius: number; color: number }
 interface FloatingText { view: Phaser.GameObjects.Text; life: number; x: number; y: number }
@@ -26,6 +28,16 @@ export class CombatView {
   }
 
   event(event: SimEvent): void {
+    if(event.type==='special') {
+      this.floatText(event.x,event.y-58,(event.text??'SPECIAL').replaceAll('-',' ').toUpperCase(),'#c8ffed');
+      this.effect('ring',event.x,event.y,0.5,event.color??0x9df5dc,65);
+    }
+    if(event.type==='slam') {
+      this.effect('ring',event.x,event.y,0.42,0xffce89,event.amount??155);
+      this.sparks(event.x,event.y,24,0xffcf91);
+      this.scene.cameras.main.shake(190,0.004);
+    }
+    if(event.type==='flash')this.effect('ring',event.x,event.y,0.3,0xf2fff1,event.amount??200);
     if(event.type==='tile-break')this.sparks(event.x,event.y,event.amount===4?6:3,event.color??0xc8be94);
     if(event.type==='prop-break')this.sparks(event.x,event.y,10,event.color??0xc6a26b);
     if (event.type === 'shot') {
@@ -82,39 +94,38 @@ export class CombatView {
       g.lineStyle(1,0xd9b775,0.5).strokeEllipse(pickup.x,pickup.y+15,36,8);
       g.fillStyle(0x13242c).fillRoundedRect(pickup.x-20,y-7,40,19,2);
       g.lineStyle(1,near?0xffd58c:0x6b8f82,0.9).strokeRoundedRect(pickup.x-20,y-7,40,19,2);
-      if (pickup.kind === 'throwable' || pickup.weapon === 'grenade') {
-        g.fillStyle(0xa1b889).fillRect(pickup.x-4,y-3,8,10);
-        g.fillStyle(0xffd282).fillRect(pickup.x-2,y-6,4,3);
+      if (THROWABLES[pickup.weapon]) {
+        drawThrowableArt(g,pickup.weapon,pickup.x,y+1,5);
+      } else if(pickup.kind==='health'||pickup.weapon==='health') {
+        g.fillStyle(0xa0e6bc).fillRect(pickup.x-3,y-4,6,13).fillRect(pickup.x-6,y,12,5);
       } else {
-        const length=pickup.weapon==='pistol'?17:28;
-        g.fillStyle(0xb0c0b0).fillRect(pickup.x-length/2,y-2,length,4);
-        g.fillStyle(0xe1b873).fillRect(pickup.x-length/2+3,y+2,4,5);
-        if (length>20) g.fillStyle(0x6a8981).fillRect(pickup.x-2,y+2,8,3);
+        g.save().translateCanvas(pickup.x-9,y+1).scaleCanvas(0.65,0.65);
+        drawWeaponArt(g,pickup.weapon);g.restore();
       }
       label.setText(`${near?'[E]  ':''}${pickup.weapon.toUpperCase()}`).setPosition(pickup.x,y-16);
     }
     for (const projectile of this.world.projectiles) {
       if (!projectile.active) continue;
       const blink = projectile.life < 60 && Math.floor(time/80)%2===0;
-      g.fillStyle(0x111e26).fillCircle(projectile.x,projectile.y,projectile.radius+2);
-      g.fillStyle(blink?0xffa06e:0x8d9f6d).fillCircle(projectile.x,projectile.y,projectile.radius);
-      g.lineStyle(1,0x48583f).lineBetween(projectile.x-4,projectile.y,projectile.x+4,projectile.y);
-      g.fillStyle(0xffd58c).fillRect(projectile.x-2,projectile.y-projectile.radius-2,4,3);
-      g.fillStyle(0xffdc9d,0.75).fillCircle(projectile.x+Math.sin(time)*2,projectile.y-projectile.radius-4,1.5);
+      if(projectile.kind==='weapon') {
+        g.save().translateCanvas(projectile.x,projectile.y).rotateCanvas(time*0.013+projectile.id).scaleCanvas(0.8,0.8);
+        drawWeaponArt(g,projectile.weapon);g.restore();
+      } else drawThrowableArt(g,projectile.weapon,projectile.x,projectile.y,projectile.radius,blink);
     }
     for (const fighter of this.world.fighters) {
       if (!fighter.alive || !fighter.combat) continue;
       const combat = fighter.combat;
       if (combat.cookTicks > 0) {
+        const throwable=THROWABLES[combat.throwable]??THROWABLES.grenade;
         let x=fighter.x+combat.aimX*22,y=fighter.y-8+combat.aimY*22;
-        let vx=combat.aimX*GRENADE.speed+fighter.vx*0.45,vy=combat.aimY*GRENADE.speed-170;
-        const remaining = Math.max(0, GRENADE.fuseTicks - combat.cookTicks);
+        let vx=combat.aimX*throwable.speed+fighter.vx*0.45,vy=combat.aimY*throwable.speed-170;
+        const remaining = Math.max(0, throwable.fuseTicks - combat.cookTicks);
         for(let step=0;step<Math.min(78,remaining);step++) {
-          vy+=GRENADE.gravity/60;x+=vx/60;y+=vy/60;
+          vy+=throwable.gravity/60;x+=vx/60;y+=vy/60;
           if(this.world.terrain.atPixel(x,y)) {g.lineStyle(1,0xffd69a,0.6).strokeCircle(x,y,5);break;}
           if(step%5===0)g.fillStyle(0xfbe1a8,0.6-step/170).fillCircle(x,y,1.7);
         }
-        const progress=Math.min(combat.cookTicks/GRENADE.fuseTicks,1);
+        const progress=Math.min(combat.cookTicks/throwable.fuseTicks,1);
         g.lineStyle(2,progress>0.7?0xff8e6c:0xffdb8e,0.9).beginPath().arc(fighter.x,fighter.y-27,10,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-progress)).strokePath();
       }
       if (fighter.action === 'melee-windup') {
@@ -124,8 +135,9 @@ export class CombatView {
         const angle=fighter.facing===1?0:Math.PI;
         const upper=combat.pendingAttack==='uppercut';
         const fade=fighter.action==='melee-active'?0.8:0.25;
-        g.lineStyle(5,0xffe3a0,fade).beginPath().arc(fighter.x,fighter.y-4,upper?43:37,angle-1.1,angle+1.1).strokePath();
-        g.lineStyle(2,0xffffff,fade).beginPath().arc(fighter.x,fighter.y-4,upper?47:41,angle-0.8,angle+0.8).strokePath();
+        const reach=WEAPONS[combat.pendingAttack]?.range??(upper?43:37);
+        g.lineStyle(5,0xffe3a0,fade).beginPath().arc(fighter.x,fighter.y-4,reach,angle-1.1,angle+1.1).strokePath();
+        g.lineStyle(2,0xffffff,fade).beginPath().arc(fighter.x,fighter.y-4,reach+4,angle-0.8,angle+0.8).strokePath();
       }
     }
     this.drawEffects(delta);

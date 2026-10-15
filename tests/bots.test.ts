@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import warehouse from '../src/data/arenas/warehouse.json';
 import { TUNING } from '../src/data/tuning';
 import { World } from '../src/sim/World';
+import { WEAPONS } from '../src/sim/weapons/definitions';
 import { neutralInput, type ArenaData, type InputCommand } from '../src/sim/types';
 
 function arena(): ArenaData {
@@ -164,10 +165,12 @@ describe('deterministic bot controllers', () => {
   });
 
   it.each([
-    { startX: 360, pickupId: 0, catwalkY: 720, weapon: 'shotgun' },
-    { startX: 912, pickupId: 1, catwalkY: 648, weapon: 'smg' },
-  ])('climbs the authored Warehouse ladder and collects catwalk pickup $pickupId', ({ startX, pickupId, catwalkY, weapon }) => {
+    { startX: 360, pickupId: 0, catwalkY: 720 },
+    { startX: 912, pickupId: 1, catwalkY: 648 },
+  ])('climbs the authored Warehouse ladder and collects catwalk pickup $pickupId', ({ startX, pickupId, catwalkY }) => {
     const world = new World(warehouse, 83);
+    const weapon = world.pickups[pickupId].weapon;
+    const slot = WEAPONS[weapon].slot as 'primary' | 'sidearm' | 'melee';
     const bot = world.addFighter({ x: startX, y: 893, controller: 'bot' });
     for (const pickup of world.pickups) {
       pickup.active = pickup.id === pickupId;
@@ -182,7 +185,7 @@ describe('deterministic bot controllers', () => {
     expect(climbed).toBe(true);
     expect(highestY).toBeLessThan(catwalkY);
     expect(world.pickups[pickupId].active).toBe(false);
-    expect(bot.combat.primary).toBe(weapon);
+    expect(bot.combat[slot]).toBe(weapon);
   });
 
   it('repairs navigation after a destroyed support tile while preserving distant nodes', () => {
