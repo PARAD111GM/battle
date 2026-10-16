@@ -178,8 +178,8 @@
         "Foot.R": 0.1231415867805481,
         "PT.R": 0.1231415644288063
       },
-      "mesh_vertices": 5448,
-      "rebased_weighted_vertices": 5448,
+      "mesh_vertices": 5664,
+      "rebased_weighted_vertices": 5664,
       "max_mesh_rest_displacement": 0.024047450664973952
     },
     "midnight": {
@@ -881,8 +881,8 @@
         {
           "name": "Small_Katnip_JacketZip",
           "source_mesh": null,
-          "vertices": 24,
-          "faces": 20
+          "vertices": 186,
+          "faces": 182
         },
         {
           "name": "Small_Katnip_JacketCollar",
@@ -893,8 +893,8 @@
         {
           "name": "Small_Katnip_QuiverStrap",
           "source_mesh": null,
-          "vertices": 8,
-          "faces": 3
+          "vertices": 62,
+          "faces": 30
         },
         {
           "name": "Small_Katnip_Quiver",

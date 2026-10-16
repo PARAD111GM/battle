@@ -96,17 +96,18 @@ def _braid(rig, hair, tie, factor):
     return extras
 
 
-def _strap(rig, leather):
+def _strap(rig, leather, surface):
     points = [Vector(p) for p in [(-.13, -.154, 1.475),
                                  (-.065, -.204, 1.370),
                                  (.025, -.188, 1.260),
                                  (.132, -.150, 1.138)]]
+    points = _sample_path(points, 10)
     vertices, faces, weights = [], [], []
     for point in points:
         for direction in (-1, 1):
-            vertices.append(point + Vector((.014 * direction, 0,
-                                            .012 * direction)))
-            weights.append(_weights(point.z))
+            edge = point + Vector((.014 * direction, 0, .012 * direction))
+            vertices.append(_front_surface_point(surface, edge, .012))
+            weights.append(_weights(edge.z))
     for i in range(len(points) - 1):
         faces.append((i * 2, i * 2 + 2, i * 2 + 3, i * 2 + 1))
     obj = _style.bind_mesh('Katnip_QuiverStrap', vertices, faces,
@@ -116,14 +117,14 @@ def _strap(rig, leather):
     return obj
 
 
-def _archery_gear(rig, leather, trim, wood, feather, string):
+def _archery_gear(rig, leather, trim, wood, feather, string, surface):
     # The bow is visibly slung, keeping the inherited unarmed run unchanged.
     base = Vector((.070, .080, 1.095))
     top = Vector((-.130, .095, 1.545))
     axis = (top - base).normalized()
     side = axis.cross(Vector((0, 1, 0))).normalized()
     depth = axis.cross(side).normalized()
-    extras = [_strap(rig, leather)]
+    extras = [_strap(rig, leather, surface)]
     extras.append(_tube('Katnip_Quiver', [base, base.lerp(top, .05), top],
                         [.030, .046, .054], rig, leather))
     extras.append(_tube('Katnip_QuiverRim', [top - axis * .018,
@@ -172,13 +173,15 @@ def _archery_gear(rig, leather, trim, wood, feather, string):
     return extras
 
 
-def _jacket_trim(rig, trim):
+def _jacket_trim(rig, trim, surface):
     # A zip front and a compact folded collar turn the simple source tee into
     # an outdoor jacket, without adding a stiff unweighted shell over it.
     centers = [Vector(p) for p in [(0, -.171, 1.115),
                                    (0, -.183, 1.235),
                                    (0, -.197, 1.355),
                                    (0, -.184, 1.438)]]
+    centers = [_front_surface_point(surface, point, .007)
+               for point in _sample_path(centers, 10)]
     zipper = _tube('Katnip_JacketZip', centers, [.003] * len(centers),
                    rig, trim, [_weights(p.z) for p in centers], sides=6)
     vertices = []
@@ -198,6 +201,115 @@ def _jacket_trim(rig, trim):
     solid = collar.modifiers.new('Collar thickness', 'SOLIDIFY')
     solid.thickness = .004
     return [zipper, collar]
+
+
+def _curve(z, knots):
+    """C1-continuous profile in canonical rest space, with flat end slopes."""
+    if z <= knots[0][0]:
+        return knots[0][1]
+    for (a, first), (b, second) in zip(knots, knots[1:]):
+        if z <= b:
+            t = (z - a) / (b - a)
+            return first + (second - first) * t * t * (3 - 2 * t)
+    return knots[-1][1]
+
+
+def _jacket_shape(point):
+    """Keep the fitted waist, giving the lower ribs a little jacket volume."""
+    p = point.copy()
+    if abs(p.x) >= .24 or not 1.10 < p.z < 1.43:
+        return p
+    lateral = 1 - _curve(abs(p.x), [(.15, 0), (.24, 1)])
+    ease = math.sin(math.pi * (p.z - 1.10) / .33)
+    ribs = _curve(p.z, [(1.10, 0), (1.18, 0), (1.30, 1), (1.40, 0)])
+    p.x *= 1 + lateral * (.045 * ease + .035 * ribs)
+    p.y += (p.y + .075) * lateral * (.075 * ease + .12 * ribs)
+    return p
+
+
+def _trouser_shape(point, rig):
+    """Move thigh fullness upward without moving joints or widening the frame.
+
+    The source's widest leg section sat near mid-thigh. A modest radial taper
+    toward each knee, followed by upper-pelvis volume, reads closer to the
+    athletic reference. The continuous map leaves waistband and boot seams
+    fixed and softens the source's abrupt rear-pelvis shelf.
+    """
+    p = point.copy()
+    side = 'L' if p.x >= 0 else 'R'
+    leg = rig.data.bones['UpperLeg.' + side]
+    center_x = leg.head_local.x
+    taper = _curve(p.z, [(.30, 1), (.42, .97), (.53, .84),
+                        (.62, .84), (.72, .90), (.80, .96), (.86, 1)])
+    p.x = center_x + (p.x - center_x) * taper
+    upper = _curve(p.z, [(.80, 1), (.85, 1.015), (.90, 1.038),
+                        (.95, 1.103), (.98, 1.125), (1.02, 1.02),
+                        (1.045, 1)])
+    p.x *= upper
+    posterior = _curve(p.y, [(-.035, 0), (.025, 1)])
+    soften = _curve(p.z, [(.77, 0), (.88, .012), (.94, .012),
+                          (1.00, -.003), (1.04, 0)])
+    p.y -= posterior * soften
+    return p
+
+
+def _sample_path(points, intervals):
+    # Sparse straight segments would cut through the convex chest even when
+    # their endpoints lie outside it. Sample the entire strap/zipper path.
+    return [a.lerp(b, step / intervals)
+            for a, b in zip(points, points[1:])
+            for step in range(intervals)] + [points[-1]]
+
+
+def _front_surface_point(surface, point, clearance):
+    p = point.copy()
+    hit, _, _, _ = surface.ray_cast(Vector((p.x, -1, p.z)), Vector((0, 1, 0)))
+    if hit is not None:
+        p.y = hit.y - clearance
+    return p
+
+
+
+def _inherit_jacket_weights(body, extras):
+    """Trim follows the same local cloth deformation during the shared Run.
+
+    Matching only the rest surface is insufficient near the shoulder and
+    chest: the jacket includes shoulder influences as well as torso bones.
+    Interpolate its triangle weights, retaining the four strongest influences
+    supported by the runtime GLB, without changing the jacket's own weights.
+    """
+    from mathutils.bvhtree import BVHTree
+    from mathutils.geometry import barycentric_transform
+    body.data.calc_loop_triangles()
+    triangles = [tuple(t.vertices) for t in body.data.loop_triangles]
+    coordinates = [v.co.copy() for v in body.data.vertices]
+    surface = BVHTree.FromPolygons(coordinates, triangles, all_triangles=True)
+    names = {group.index: group.name for group in body.vertex_groups}
+    source = [{names[group.group]: group.weight for group in vertex.groups}
+              for vertex in body.data.vertices]
+    for obj in extras:
+        if obj.name not in {'Katnip_JacketZip', 'Katnip_QuiverStrap'}:
+            continue
+        for group in list(obj.vertex_groups):
+            obj.vertex_groups.remove(group)
+        for vertex in obj.data.vertices:
+            nearest, _, triangle, _ = surface.find_nearest(vertex.co)
+            assert nearest is not None, 'Trim has no jacket surface'
+            indices = triangles[triangle]
+            a, b, c = (coordinates[index] for index in indices)
+            blend = barycentric_transform(nearest, a, b, c,
+                    Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1)))
+            weights = {}
+            for index, amount in zip(indices, blend):
+                for name, weight in source[index].items():
+                    weights[name] = weights.get(name, 0) + max(0, amount) * weight
+            influences = sorted(weights.items(), key=lambda pair: pair[1], reverse=True)[:4]
+            total = sum(weight for _, weight in influences)
+            assert total > 1e-6, 'Trim has no skin weights'
+            for name, weight in influences:
+                if weight > 1e-8:
+                    group = obj.vertex_groups.get(name) or obj.vertex_groups.new(name=name)
+                    group.add([vertex.index], weight / total, 'REPLACE')
 
 
 def style_character(character, rig, meshes):
@@ -242,17 +354,13 @@ def style_character(character, rig, meshes):
                 if originals[poly.material_index] == 'Skin' and .20 < abs(center.x) < .645:
                     poly.material_index = jacket_index
             for vert in obj.data.vertices:
-                p = vert.co
-                # A little ease gives the source fitted tee the silhouette of
-                # a practical jacket without altering the shoulder/neck seam.
-                if 1.10 < p.z < 1.43 and abs(p.x) < .22:
-                    blend = math.sin(math.pi * (p.z - 1.10) / .33)
-                    p.x *= 1 + .045 * blend
-                    p.y += (p.y + .075) * .075 * blend
+                vert.co = _jacket_shape(vert.co)
         elif part == 'Head':
             for vert in obj.data.vertices:
                 vert.co = _style.enlarged_head(vert.co, head_factor)
         elif part == 'Legs':
+            for vert in obj.data.vertices:
+                vert.co = _trouser_shape(vert.co, rig)
             # The lower trouser cuff becomes a matching boot shaft. Keeping
             # source geometry and weights avoids a shoe/ankle gap during runs.
             obj.data.materials.append(palette['boots'])
@@ -262,10 +370,19 @@ def style_character(character, rig, meshes):
                     poly.material_index = boot_index
         _style.weld_and_smooth(obj)
         obj.name = 'Katnip_' + part
+    from mathutils.bvhtree import BVHTree
+    body = next(obj for obj in meshes if obj.name == 'Katnip_Body')
+    surface = BVHTree.FromPolygons([v.co for v in body.data.vertices],
+                                  [tuple(p.vertices) for p in body.data.polygons])
     extras = _braid(rig, palette['hair'], palette['leather'], head_factor)
-    extras.extend(_jacket_trim(rig, palette['jacket_trim']))
+    extras.extend(_jacket_trim(rig, palette['jacket_trim'], surface))
     extras.extend(_archery_gear(rig, palette['leather'], palette['trim'],
-                               palette['wood'], palette['feather'], palette['string']))
+                               palette['wood'], palette['feather'], palette['string'], surface))
+    for extra in extras:
+        if 'Braid' in extra.name or extra.name == 'Katnip_JacketCollar':
+            for vertex in extra.data.vertices:
+                vertex.co = _jacket_shape(vertex.co)
+    _inherit_jacket_weights(body, extras)
     rig['character'] = 'Katnip Neverdo'
     rig['shared_rig_variant'] = True
     rig['art_status'] = 'Original archer parody prototype based on Quaternius CC0 modular characters'

@@ -394,37 +394,70 @@ def render_frame(path, frame):
 
 
 def render_proportion_comparison(rigs, camera):
-    """Compare body outlines in an orthographic front view with arms lowered.
+    """Render the lineup and matching front/side studies of Katnip's outline.
 
     This temporary review pose does not change the exported animation or the
-    editable scene. Restore every pose, action, location, and camera setting.
+    editable scene. Restore poses, actions, visibility, and render settings.
     """
     scene = bpy.context.scene
     saved_frame, saved_subframe = scene.frame_current, scene.frame_subframe
     camera_matrix, camera_scale = camera.matrix_world.copy(), camera.data.ortho_scale
+    render_settings = (scene.render.filepath, scene.render.resolution_x,
+                       scene.render.resolution_y, scene.render.resolution_percentage)
     saved = {key: (rig.animation_data.action, rig.location.copy(),
                    {bone.name: bone.matrix_basis.copy() for bone in rig.pose.bones})
              for key, rig in rigs.items()}
+    character_objects = {key: [rig, *character_meshes(rig)] for key, rig in rigs.items()}
+    visibility = {obj: obj.hide_render for objects in character_objects.values() for obj in objects}
+
+    def set_review_pose(rig, arm_angle, forward_angle=0):
+        for bone in rig.pose.bones:
+            bone.matrix_basis = Matrix.Identity(4)
+        bpy.context.view_layer.update()
+        for side, sign in [('L', 1), ('R', -1)]:
+            bone = rig.pose.bones['UpperArm.' + side]
+            pivot = bone.head.copy()
+            rotation = (Matrix.Rotation(forward_angle, 4, 'X')
+                        @ Matrix.Rotation(sign * arm_angle, 4, 'Y'))
+            bone.matrix = (Matrix.Translation(pivot) @ rotation
+                           @ Matrix.Translation(-pivot) @ bone.matrix)
+        bpy.context.view_layer.update()
+
     try:
         for index, key in enumerate(('small', 'midnight', 'brick')):
             rig = rigs[key]
             rig.animation_data.action = None
             rig.location = ((index - 1) * 1.65, 0, 0)
-            for bone in rig.pose.bones:
-                bone.matrix_basis = Matrix.Identity(4)
-        bpy.context.view_layer.update()
-        for rig in rigs.values():
-            for side, sign in [('L', 1), ('R', -1)]:
-                bone = rig.pose.bones['UpperArm.' + side]
-                pivot = bone.head.copy()
-                bone.matrix = (Matrix.Translation(pivot) @ Matrix.Rotation(sign * math.pi / 2, 4, 'Y')
-                               @ Matrix.Translation(-pivot) @ bone.matrix)
+            set_review_pose(rig, math.pi / 2)
         camera.location = (0, -9, 1.0)
         aim(camera, (0, 0, 1.0))
         camera.data.ortho_scale = 5.3
         bpy.context.view_layer.update()
         scene.render.filepath = str(DOCS / 'shared-rig-proportions.png')
         bpy.ops.render.render(write_still=True)
+
+        # Portrait studies use identical framing, scale, and ground height so
+        # the front silhouette and side depth can be compared directly.
+        for key, objects in character_objects.items():
+            for obj in objects:
+                obj.hide_render = key != 'small' or visibility[obj]
+        small = rigs['small']
+        small.location = (0, 0, 0)
+        scene.render.resolution_x = 900
+        scene.render.resolution_y = 1100
+        scene.render.resolution_percentage = 100
+        camera.data.ortho_scale = 2.35
+        for view, position, arm_angle, forward_angle in [
+            ('front', (0, -9, .96), math.pi / 4, 0),
+            # A slight forward arm angle reveals the waist and hip contour.
+            ('side', (9, 0, .96), math.radians(85), math.radians(-12)),
+        ]:
+            set_review_pose(small, arm_angle, forward_angle)
+            camera.location = position
+            aim(camera, (0, 0, .96))
+            bpy.context.view_layer.update()
+            scene.render.filepath = str(DOCS / f'katnip-proportions-{view}.png')
+            bpy.ops.render.render(write_still=True)
     finally:
         for key, rig in rigs.items():
             action, location, poses = saved[key]
@@ -434,6 +467,10 @@ def render_proportion_comparison(rigs, camera):
             rig.animation_data.action = action
         camera.matrix_world = camera_matrix
         camera.data.ortho_scale = camera_scale
+        for obj, hidden in visibility.items():
+            obj.hide_render = hidden
+        (scene.render.filepath, scene.render.resolution_x,
+         scene.render.resolution_y, scene.render.resolution_percentage) = render_settings
         scene.frame_set(saved_frame, subframe=saved_subframe)
         bpy.context.view_layer.update()
 
