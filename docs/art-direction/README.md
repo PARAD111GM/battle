@@ -1,5 +1,13 @@
 # Character art and animation studies
 
+## Shared-rig 3D prototype
+
+Mr. Midnight and Brick now have a working comparison prototype: two distinct character meshes use the same humanoid skeleton and one run animation. The models are adapted prototype art; this establishes the rig and rendering workflow before final character modeling.
+
+- [Watch the 3D run comparison](shared-rig/shared-rig-run.gif).
+- [60 fps video](shared-rig/shared-rig-run.mp4) and [side-view GIF](shared-rig/shared-rig-run-side.gif).
+- [Interactive viewer, editable models, source credits, and rebuild instructions](shared-rig/README.md).
+
 ## Mr. Midnight — second animation test
 
 This attempt uses illustrated sprite frames based on Mr. Midnight in column **B** of the original style sheet. It keeps the character's face, suit, and proportions, with twelve poses in a 0.6-second run cycle. It is an animation approval test, not yet integrated into gameplay.

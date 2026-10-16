@@ -1,0 +1,498 @@
+{
+  "fps": 60,
+  "duration": 0.8,
+  "unique_frames": 48,
+  "clip": "Run",
+  "source_animation": "Quaternius Run (authored poses preserved; closing pose added and uniformly retimed)",
+  "shared_armature_data": true,
+  "shared_action_data": true,
+  "bone_count": 62,
+  "skeleton_sha256": "7e4300d46b61f44985b9d104a593b0656cf20d23ce3c4ebf54d73407f7c92778",
+  "source_action_sha256": "4ba483945c24477d49dfc9d24746785d0f863ae5fdf2dd876d2091a2eadb6535",
+  "action_sha256": "d5036f18b88bb3b62b0ea61be97346e2cdf5ba120c70dde3a70d42194e09607e",
+  "loop_preparation": {
+    "source_duration_seconds": 0.8,
+    "source_samples_at_30fps": 25,
+    "appended_first_pose_at_source_seconds": 0.8333333333333334,
+    "uniform_key_time_scale": 0.96,
+    "playback_speed_multiplier": 1.0416666666666667,
+    "final_duration_seconds": 0.8,
+    "authored_pose_values_preserved": true,
+    "source_key_count": 2587,
+    "appended_key_count": 408
+  },
+  "loop_max_translation_error": 0.0,
+  "loop_max_matrix_error": 0.0,
+  "same_pose_max_matrix_error": 0,
+  "quarter_poses_armature_space": [
+    {
+      "Body": [
+        0.0004532,
+        -0.026683,
+        0.8118104
+      ],
+      "Head": [
+        -0.0077607,
+        -0.1443711,
+        1.5201577
+      ],
+      "UpperLeg.L": [
+        0.1205915,
+        -0.0450638,
+        0.9105598
+      ],
+      "UpperLeg.R": [
+        -0.1205915,
+        -0.0450638,
+        0.9105598
+      ],
+      "LowerLeg.L": [
+        0.1304797,
+        -0.0327978,
+        0.4778678
+      ],
+      "LowerLeg.R": [
+        -0.0962324,
+        -0.2497551,
+        0.529799
+      ],
+      "Foot.L": [
+        0.1205915,
+        0.4715568,
+        0.5596152
+      ],
+      "Foot.R": [
+        -0.0685071,
+        -0.1916902,
+        0.0227517
+      ]
+    },
+    {
+      "Body": [
+        0.0004532,
+        -0.026683,
+        0.8343971
+      ],
+      "Head": [
+        0.0173614,
+        -0.1247728,
+        1.5467503
+      ],
+      "UpperLeg.L": [
+        0.1205915,
+        -0.0450638,
+        0.9331465
+      ],
+      "UpperLeg.R": [
+        -0.1205915,
+        -0.0450638,
+        0.9331465
+      ],
+      "LowerLeg.L": [
+        0.1322905,
+        -0.3934779,
+        0.676356
+      ],
+      "LowerLeg.R": [
+        -0.0926867,
+        0.0778318,
+        0.5189138
+      ],
+      "Foot.L": [
+        0.1205915,
+        -0.2376073,
+        0.1963352
+      ],
+      "Foot.R": [
+        -0.0685071,
+        0.4273105,
+        0.1479116
+      ]
+    },
+    {
+      "Body": [
+        0.0004532,
+        -0.026683,
+        0.8056012
+      ],
+      "Head": [
+        0.0062473,
+        -0.1440256,
+        1.51405
+      ],
+      "UpperLeg.L": [
+        0.1205915,
+        -0.0450638,
+        0.9043506
+      ],
+      "UpperLeg.R": [
+        -0.1205915,
+        -0.0450638,
+        0.9043505
+      ],
+      "LowerLeg.L": [
+        0.1108727,
+        -0.2431775,
+        0.5194777
+      ],
+      "LowerLeg.R": [
+        -0.103475,
+        -0.0686996,
+        0.4723562
+      ],
+      "Foot.L": [
+        0.0685071,
+        -0.1413832,
+        0.0224962
+      ],
+      "Foot.R": [
+        -0.1205915,
+        0.4351506,
+        0.5579888
+      ]
+    },
+    {
+      "Body": [
+        0.0004532,
+        -0.026683,
+        0.830431
+      ],
+      "Head": [
+        -0.0182316,
+        -0.124566,
+        1.5428026
+      ],
+      "UpperLeg.L": [
+        0.1205915,
+        -0.0450638,
+        0.9291804
+      ],
+      "UpperLeg.R": [
+        -0.1205915,
+        -0.0450638,
+        0.9291804
+      ],
+      "LowerLeg.L": [
+        0.1003189,
+        0.0752013,
+        0.5137337
+      ],
+      "LowerLeg.R": [
+        -0.1010991,
+        -0.400719,
+        0.6830094
+      ],
+      "Foot.L": [
+        0.0685071,
+        0.4128452,
+        0.1320936
+      ],
+      "Foot.R": [
+        -0.1205915,
+        -0.2107143,
+        0.2142434
+      ]
+    },
+    {
+      "Body": [
+        0.0004532,
+        -0.026683,
+        0.8118104
+      ],
+      "Head": [
+        -0.0077607,
+        -0.1443711,
+        1.5201577
+      ],
+      "UpperLeg.L": [
+        0.1205915,
+        -0.0450638,
+        0.9105598
+      ],
+      "UpperLeg.R": [
+        -0.1205915,
+        -0.0450638,
+        0.9105598
+      ],
+      "LowerLeg.L": [
+        0.1304797,
+        -0.0327978,
+        0.4778678
+      ],
+      "LowerLeg.R": [
+        -0.0962324,
+        -0.2497551,
+        0.529799
+      ],
+      "Foot.L": [
+        0.1205915,
+        0.4715568,
+        0.5596152
+      ],
+      "Foot.R": [
+        -0.0685071,
+        -0.1916902,
+        0.0227517
+      ]
+    }
+  ],
+  "characters": {
+    "midnight": {
+      "root": "MidnightRig",
+      "blender_position": [
+        -0.9402167797088623,
+        0.6268112063407898,
+        0.0
+      ],
+      "gltf_position": [
+        -0.9402167797088623,
+        0.0,
+        -0.6268112063407898
+      ],
+      "meshes": [
+        {
+          "name": "Midnight_Body",
+          "source_mesh": "Suit_Body",
+          "vertices": 1460,
+          "faces": 2916
+        },
+        {
+          "name": "Midnight_Feet",
+          "source_mesh": "Suit_Feet",
+          "vertices": 276,
+          "faces": 528
+        },
+        {
+          "name": "Midnight_Legs",
+          "source_mesh": "Suit_Legs",
+          "vertices": 369,
+          "faces": 734
+        },
+        {
+          "name": "Midnight_Head",
+          "source_mesh": "Casual2_Head",
+          "vertices": 271,
+          "faces": 496
+        },
+        {
+          "name": "Midnight_EyeWhite_-1",
+          "source_mesh": null,
+          "vertices": 220,
+          "faces": 200
+        },
+        {
+          "name": "Midnight_Pupil_-1",
+          "source_mesh": null,
+          "vertices": 220,
+          "faces": 200
+        },
+        {
+          "name": "Midnight_EyeWhite_1",
+          "source_mesh": null,
+          "vertices": 220,
+          "faces": 200
+        },
+        {
+          "name": "Midnight_Pupil_1",
+          "source_mesh": null,
+          "vertices": 220,
+          "faces": 200
+        },
+        {
+          "name": "Midnight_SweptHair",
+          "source_mesh": null,
+          "vertices": 624,
+          "faces": 576
+        },
+        {
+          "name": "Midnight_LongHair",
+          "source_mesh": null,
+          "vertices": 155,
+          "faces": 120
+        },
+        {
+          "name": "Midnight_Mouth",
+          "source_mesh": null,
+          "vertices": 220,
+          "faces": 200
+        },
+        {
+          "name": "Midnight_MouthLine",
+          "source_mesh": null,
+          "vertices": 220,
+          "faces": 200
+        }
+      ],
+      "poster_world_bounds": {
+        "min": [
+          -1.2225795984268188,
+          0.29479193687438965,
+          -0.0030002668499946594
+        ],
+        "max": [
+          -0.5840054154396057,
+          0.8707095384597778,
+          1.8278216123580933
+        ]
+      }
+    },
+    "brick": {
+      "root": "BrickRig",
+      "blender_position": [
+        0.9402167797088623,
+        -0.6268112063407898,
+        0.0
+      ],
+      "gltf_position": [
+        0.9402167797088623,
+        0.0,
+        0.6268112063407898
+      ],
+      "meshes": [
+        {
+          "name": "Brick_Head",
+          "source_mesh": "Suit_Head",
+          "vertices": 1270,
+          "faces": 2380
+        },
+        {
+          "name": "Brick_Body",
+          "source_mesh": "Casual2_Body",
+          "vertices": 1405,
+          "faces": 2806
+        },
+        {
+          "name": "Brick_Feet",
+          "source_mesh": "Swat_Feet",
+          "vertices": 284,
+          "faces": 560
+        },
+        {
+          "name": "Brick_Legs",
+          "source_mesh": "Swat_Legs",
+          "vertices": 899,
+          "faces": 1779
+        },
+        {
+          "name": "Brick_EyeWhite_-1",
+          "source_mesh": null,
+          "vertices": 220,
+          "faces": 200
+        },
+        {
+          "name": "Brick_Pupil_-1",
+          "source_mesh": null,
+          "vertices": 220,
+          "faces": 200
+        },
+        {
+          "name": "Brick_EyeWhite_1",
+          "source_mesh": null,
+          "vertices": 220,
+          "faces": 200
+        },
+        {
+          "name": "Brick_Pupil_1",
+          "source_mesh": null,
+          "vertices": 220,
+          "faces": 200
+        },
+        {
+          "name": "Brick_Bandolier",
+          "source_mesh": null,
+          "vertices": 8,
+          "faces": 3
+        },
+        {
+          "name": "Brick_Cartridge_1",
+          "source_mesh": null,
+          "vertices": 30,
+          "faces": 21
+        },
+        {
+          "name": "Brick_Cartridge_2",
+          "source_mesh": null,
+          "vertices": 30,
+          "faces": 21
+        },
+        {
+          "name": "Brick_Cartridge_3",
+          "source_mesh": null,
+          "vertices": 30,
+          "faces": 21
+        },
+        {
+          "name": "Brick_Cartridge_4",
+          "source_mesh": null,
+          "vertices": 30,
+          "faces": 21
+        },
+        {
+          "name": "Brick_Cartridge_5",
+          "source_mesh": null,
+          "vertices": 30,
+          "faces": 21
+        }
+      ],
+      "poster_world_bounds": {
+        "min": [
+          0.644506573677063,
+          -0.9837363958358765,
+          -0.0026979255490005016
+        ],
+        "max": [
+          1.2964282035827637,
+          -0.3835546374320984,
+          1.8062403202056885
+        ]
+      }
+    }
+  },
+  "camera": {
+    "blender_position": [
+      -6.0,
+      -9.0,
+      2.5999999046325684
+    ],
+    "gltf_position": [
+      -6,
+      2.6,
+      9
+    ],
+    "gltf_target": [
+      0,
+      0.94,
+      0
+    ],
+    "orthographic_width": 4.5
+  },
+  "axes": {
+    "blender": {
+      "up": "+Z",
+      "front": "-Y"
+    },
+    "gltf": {
+      "up": "+Y",
+      "front": "+Z"
+    }
+  },
+  "export": {
+    "path": "docs/art-direction/shared-rig/shared-rig.glb",
+    "clips": [
+      {
+        "name": "Run",
+        "duration": 0.8,
+        "channels": 372
+      }
+    ],
+    "skins": 2,
+    "nodes": 152
+  },
+  "render": {
+    "engine": "BLENDER_EEVEE_NEXT",
+    "samples": 16,
+    "denoising": false,
+    "width": 960,
+    "height": 640
+  }
+}
