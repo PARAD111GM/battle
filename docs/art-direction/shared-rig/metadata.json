@@ -13,8 +13,8 @@
       "id": "small",
       "label": "Small / female",
       "uniform_scale": 0.9454754863,
-      "shoulder_anchor_width": 1.42,
-      "hip_anchor_width": 1.23,
+      "shoulder_anchor_width": 1.132,
+      "hip_anchor_width": 1.026,
       "lengths": {
         "Abdomen": 0.98,
         "Torso": 0.97,
@@ -37,57 +37,57 @@
       "strategy": "Compatible rest proportions, weighted rest-mesh rebasing, uniform whole-character scale",
       "shared_action_preserved": true,
       "bone_names_and_parents_preserved": true,
-      "rest_axis_max_matrix_error": 4.172325134277344e-07,
+      "rest_axis_max_matrix_error": 4.76837158203125e-07,
       "protected_lower_body_max_matrix_error": 0.0,
       "protected_reference_bones": [
         "Root",
         "Body",
         "Hips"
       ],
-      "lower_body_max_length_error": 2.9802322387695312e-08,
+      "lower_body_max_length_error": 5.960464477539063e-08,
       "hip_stance_lateral_offsets": {
         "UpperLeg.L": [
-          0.02773604355752468,
+          0.0031353787053376436,
           0.0,
           0.0
         ],
         "LowerLeg.L": [
-          0.02773604355752468,
+          0.0031353787053376436,
           0.0,
           0.0
         ],
         "Foot.L": [
-          0.02773604355752468,
+          0.0031353787053376436,
           0.0,
           0.0
         ],
         "PT.L": [
-          0.02773604355752468,
+          0.0031353787053376436,
           0.0,
           0.0
         ],
         "UpperLeg.R": [
-          -0.02773604355752468,
+          -0.0031353787053376436,
           0.0,
           0.0
         ],
         "LowerLeg.R": [
-          -0.02773604355752468,
+          -0.0031353787053376436,
           0.0,
           0.0
         ],
         "Foot.R": [
-          -0.02773604355752468,
+          -0.0031353787053376436,
           0.0,
           0.0
         ],
         "PT.R": [
-          -0.02773604355752468,
+          -0.0031353787053376436,
           0.0,
           0.0
         ]
       },
-      "ankle_foot_offset_max_error": 1.1920928955078125e-07,
+      "ankle_foot_offset_max_error": 2.1348221275053028e-07,
       "ankle_foot_offset_sample_count": 49,
       "lower_body_note": "Leg bone lengths remain unchanged. Hip width shifts each leg chain and its Root-child Foot/PT nodes laterally together; the Run preserves the lateral axis, and all sampled ankle-to-foot offsets match the source. Other clips require the same validation or stance retargeting. Uniform scale changes skeleton, mesh, stride and foot translations together; independent leg-length edits require contact-aware retargeting.",
       "source_local_metrics": {
@@ -99,17 +99,17 @@
         "head_joint_height": 1.587261438369751
       },
       "profile_local_metrics": {
-        "shoulder_joint_span": 0.3790776170010617,
-        "hip_joint_span": 0.2966550589529278,
-        "arm_chain_length": 0.43271018750965595,
+        "shoulder_joint_span": 0.32240050989848273,
+        "hip_joint_span": 0.24745373132054918,
+        "arm_chain_length": 0.43271023593842983,
         "leg_chain_length": 0.8659584224224091,
         "torso_chain_length": 0.5749467611312866,
         "head_joint_height": 1.5748714208602905
       },
       "physical_metrics": {
-        "shoulder_joint_span": 0.35840859427952393,
-        "hip_joint_span": 0.2804800861268746,
-        "arm_chain_length": 0.40911687496265614,
+        "shoulder_joint_span": 0.3048217788796359,
+        "hip_joint_span": 0.23396143695704577,
+        "arm_chain_length": 0.4091169207508747,
         "leg_chain_length": 0.818742460555408,
         "torso_chain_length": 0.5435980685772132,
         "head_joint_height": 1.4890023224978552
@@ -123,64 +123,64 @@
         "Chest": 0.10027586668729782,
         "Neck": 0.0767287015914917,
         "Head": 0.0767287090420723,
-        "Shoulder.L": 0.06038267910480499,
+        "Shoulder.L": 0.060382671654224396,
         "UpperArm.L": 0.176450714468956,
-        "LowerArm.L": 0.22822155058383942,
-        "Wrist.L": 0.028037922456860542,
+        "LowerArm.L": 0.228221595287323,
+        "Wrist.L": 0.02803792618215084,
         "Index1.L": 0.12436743825674057,
-        "Index2.L": 0.03275369852781296,
-        "Index3.L": 0.029531504958868027,
-        "Index4.L": 0.029531527310609818,
-        "Middle1.L": 0.1238783523440361,
+        "Index2.L": 0.032753702253103256,
+        "Index3.L": 0.029531508684158325,
+        "Index4.L": 0.02953152544796467,
+        "Middle1.L": 0.1238783597946167,
         "Middle2.L": 0.04039360210299492,
-        "Middle3.L": 0.0403716079890728,
+        "Middle3.L": 0.0403716042637825,
         "Middle4.L": 0.040371596813201904,
-        "Ring1.L": 0.12290295958518982,
-        "Ring2.L": 0.03393898904323578,
-        "Ring3.L": 0.03317743167281151,
+        "Ring1.L": 0.12290296703577042,
+        "Ring2.L": 0.03393899276852608,
+        "Ring3.L": 0.03317742794752121,
         "Ring4.L": 0.03317746892571449,
-        "Pinky1.L": 0.1194940134882927,
-        "Pinky2.L": 0.02656390890479088,
-        "Pinky3.L": 0.02758307196199894,
-        "Pinky4.L": 0.027583101764321327,
-        "Thumb1.L": 0.08230975270271301,
-        "Thumb2.L": 0.032080087810754776,
-        "Thumb3.L": 0.03208009526133537,
-        "Shoulder.R": 0.060382697731256485,
-        "UpperArm.R": 0.1764506697654724,
+        "Pinky1.L": 0.11949409544467926,
+        "Pinky2.L": 0.026563918218016624,
+        "Pinky3.L": 0.027583075687289238,
+        "Pinky4.L": 0.027583105489611626,
+        "Thumb1.L": 0.08230976015329361,
+        "Thumb2.L": 0.03208009526133537,
+        "Thumb3.L": 0.03208009898662567,
+        "Shoulder.R": 0.06038270518183708,
+        "UpperArm.R": 0.1764507293701172,
         "LowerArm.R": 0.2282215654850006,
-        "Wrist.R": 0.028037872165441513,
+        "Wrist.R": 0.028037868440151215,
         "Index1.R": 0.12436729669570923,
         "Index2.R": 0.032753873616456985,
-        "Index3.R": 0.029531562700867653,
-        "Index4.R": 0.029531534761190414,
+        "Index3.R": 0.029531560838222504,
+        "Index4.R": 0.02953154221177101,
         "Middle1.R": 0.12387838214635849,
         "Middle2.R": 0.040393490344285965,
         "Middle3.R": 0.0403716154396534,
         "Middle4.R": 0.0403716117143631,
         "Ring1.R": 0.12290305644273758,
         "Ring2.R": 0.0339389406144619,
-        "Ring3.R": 0.033177558332681656,
-        "Ring4.R": 0.033177588135004044,
+        "Ring3.R": 0.03317755460739136,
+        "Ring4.R": 0.033177584409713745,
         "Pinky1.R": 0.1194939911365509,
-        "Pinky2.R": 0.026563851162791252,
+        "Pinky2.R": 0.0265638530254364,
         "Pinky3.R": 0.027583135291934013,
         "Pinky4.R": 0.027583112940192223,
-        "Thumb1.R": 0.08230987191200256,
-        "Thumb2.R": 0.03208009526133537,
+        "Thumb1.R": 0.08230987936258316,
+        "Thumb2.R": 0.03208009898662567,
         "Thumb3.R": 0.03208009898662567,
         "UpperLeg.L": 0.4329792261123657,
         "LowerLeg.L": 0.43297919631004333,
         "UpperLeg.R": 0.43297919631004333,
-        "LowerLeg.R": 0.4329792559146881,
-        "Foot.L": 0.1231415867805481,
+        "LowerLeg.R": 0.4329792857170105,
+        "Foot.L": 0.1231415793299675,
         "PT.L": 0.1231415644288063,
-        "Foot.R": 0.1231415793299675,
+        "Foot.R": 0.1231415867805481,
         "PT.R": 0.1231415644288063
       },
       "mesh_vertices": 5448,
       "rebased_weighted_vertices": 5448,
-      "max_mesh_rest_displacement": 0.04019358480218427
+      "max_mesh_rest_displacement": 0.024047450664973952
     },
     "midnight": {
       "id": "medium",
@@ -521,6 +521,9 @@
     "target_rig": "CharacterArmature",
     "max_rest_rotation_difference_radians": 1.5708223581314087,
     "mesh_cross_section_orientation_preserved": true,
+    "rest_axis_coordinate_space": "armature",
+    "max_rest_axis_alignment_error": 1.97686242482388e-07,
+    "max_anatomical_joint_mapping_error": 6.353667992124823e-07,
     "bone_length_ratio_min": 0.8382552123654502,
     "bone_length_ratio_max": 1.0,
     "scaled_limb_segments": {
@@ -535,28 +538,28 @@
     },
     "meshes": [
       {
-        "name": "Casual_Feet",
-        "vertices": 1082,
-        "max_vertex_displacement": 0.06450521590721754,
-        "max_source_weight_sum_error": 2.9802322387695312e-08
-      },
-      {
-        "name": "Casual_Head",
-        "vertices": 5122,
-        "max_vertex_displacement": 0.002438212795441649,
-        "max_source_weight_sum_error": 2.9802322387695312e-08
-      },
-      {
         "name": "Casual_Body",
         "vertices": 5338,
-        "max_vertex_displacement": 0.11230840469511086,
+        "max_vertex_displacement": 0.11230614884089182,
         "max_source_weight_sum_error": 3.818422555923462e-08
       },
       {
         "name": "Casual_Legs",
         "vertices": 1426,
-        "max_vertex_displacement": 0.11176663671222496,
+        "max_vertex_displacement": 0.11176663664407387,
         "max_source_weight_sum_error": 3.725290298461914e-08
+      },
+      {
+        "name": "Casual_Head",
+        "vertices": 5122,
+        "max_vertex_displacement": 0.0020615095391441772,
+        "max_source_weight_sum_error": 2.9802322387695312e-08
+      },
+      {
+        "name": "Casual_Feet",
+        "vertices": 1082,
+        "max_vertex_displacement": 0.024783399468929167,
+        "max_source_weight_sum_error": 2.9802322387695312e-08
       }
     ],
     "skipped_unbound_meshes": [
@@ -580,7 +583,7 @@
   "variant_checks": {
     "small": {
       "loop_max_matrix_error": 0,
-      "max_bone_length_drift": 4.356916049608195e-07,
+      "max_bone_length_drift": 4.359940845577448e-07,
       "max_local_animation_matrix_error": 0
     },
     "midnight": {
@@ -825,7 +828,7 @@
         0.9454754590988159,
         0.9454754590988159
       ],
-      "skeleton_sha256": "fbc2609db50d9d0c092576097906f00d0cc57543a5562c616460e2d93bd23a64",
+      "skeleton_sha256": "3b00ed3844250513815390defa9fcb3de2c293c5f9843b539e6d2aa1e52b84d6",
       "meshes": [
         {
           "name": "Small_Katnip_Body",
@@ -962,12 +965,12 @@
       ],
       "poster_world_bounds": {
         "min": [
-          -1.8267251253128052,
-          0.7174808382987976,
-          -0.008543599396944046
+          -1.805130958557129,
+          0.7174808979034424,
+          -0.008543595671653748
         ],
         "max": [
-          -1.1786247491836548,
+          -1.2005987167358398,
           1.258662223815918,
           1.6774992942810059
         ]

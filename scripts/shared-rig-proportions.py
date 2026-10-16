@@ -23,7 +23,7 @@ PROFILES = {
         # Match exterior shoulder/hip widths, not just joint spacing. Core
         # head-to-sole height is 95% of medium; hair/equipment do not set size.
         'label': 'Small / female', 'uniform_scale': .9454754863,
-        'shoulder_anchor_width': 1.42, 'hip_anchor_width': 1.23,
+        'shoulder_anchor_width': 1.132, 'hip_anchor_width': 1.026,
         'lengths': {'Abdomen': .98, 'Torso': .97, 'Chest': .98,
                     'Shoulder': .92, 'UpperArm': .97, 'LowerArm': .97},
         'radial': {'Hips': 1.035, 'Abdomen': .96, 'Torso': .95,

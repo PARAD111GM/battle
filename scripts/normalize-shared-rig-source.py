@@ -48,6 +48,8 @@ def normalize_source(source, target_rig, scale_bone_lengths=True):
                   **{f'UpperLeg.{side}': f'LowerLeg.{side}' for side in ('L', 'R')},
                   **{f'LowerLeg.{side}': f'Foot.{side}' for side in ('L', 'R')}}
     max_rest_rotation_difference = 0.0
+    max_rest_axis_alignment_error = 0.0
+    max_anatomical_joint_mapping_error = 0.0
     for source_bone in source_rig.data.bones:
         target_bone = target_rig.data.bones[source_bone.name]
         ratio = 1.0
@@ -60,15 +62,31 @@ def normalize_source(source, target_rig, scale_bone_lengths=True):
         assert isfinite(ratio) and ratio > 0, (source_bone.name, ratio)
         scale = Matrix.Diagonal((1.0, ratio, 1.0, 1.0))
         source_basis = source_bone.matrix_local.to_3x3().to_4x4()
-        direction_rotation = source_bone.y_axis.rotation_difference(target_bone.y_axis)
+        # Bone.y_axis is parent-relative. The source and canonical rigs use
+        # different parent rolls, so comparing those axes would rotate an
+        # otherwise straight upper arm away from its shoulder-to-elbow line.
+        # Both directions must be in armature rest space, like the heads and
+        # source_basis used by the surrounding affine transform.
+        source_direction = (source_bone.tail_local - source_bone.head_local).normalized()
+        target_direction = (target_bone.tail_local - target_bone.head_local).normalized()
+        direction_rotation = source_direction.rotation_difference(target_direction)
+        max_rest_axis_alignment_error = max(max_rest_axis_alignment_error,
+            ((direction_rotation @ source_direction) - target_direction).length)
         transforms[source_bone.name] = (Matrix.Translation(target_bone.head_local)
             @ direction_rotation.to_matrix().to_4x4()
             @ source_basis @ scale @ source_basis.inverted()
             @ Matrix.Translation(-source_bone.head_local))
+        if scale_bone_lengths and source_bone.name in next_joint:
+            following = next_joint[source_bone.name]
+            mapped_joint = transforms[source_bone.name] @ source_rig.data.bones[following].head_local
+            max_anatomical_joint_mapping_error = max(max_anatomical_joint_mapping_error,
+                (mapped_joint - target_rig.data.bones[following].head_local).length)
         ratios[source_bone.name] = ratio
         max_rest_rotation_difference = max(max_rest_rotation_difference,
             source_bone.matrix_local.to_quaternion().rotation_difference(
                 target_bone.matrix_local.to_quaternion()).angle)
+    assert max_rest_axis_alignment_error < 1e-5, 'Rebind rest axes do not align'
+    assert max_anatomical_joint_mapping_error < 1e-5, 'Rebind limb endpoints do not align'
 
     meshes = []
     skipped = []
@@ -116,6 +134,9 @@ def normalize_source(source, target_rig, scale_bone_lengths=True):
             'source_rig': source_rig.name, 'target_rig': target_rig.name,
             'max_rest_rotation_difference_radians': max_rest_rotation_difference,
             'mesh_cross_section_orientation_preserved': True,
+            'rest_axis_coordinate_space': 'armature',
+            'max_rest_axis_alignment_error': max_rest_axis_alignment_error,
+            'max_anatomical_joint_mapping_error': max_anatomical_joint_mapping_error,
             'bone_length_ratio_min': min(ratios.values()),
             'bone_length_ratio_max': max(ratios.values()),
             'scaled_limb_segments': {name: ratio for name, ratio in ratios.items() if abs(ratio - 1.0) > 1e-7},

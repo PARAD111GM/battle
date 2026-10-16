@@ -15,7 +15,8 @@ This is an isolated animation and proportion test; these models are not integrat
 - [60 fps video](shared-rig-run.mp4) — six repetitions of the 0.8-second cycle. Download the raw file if GitHub does not play it inline.
 - [Side-view GIF](shared-rig-run-side.gif) — inspect the alternating legs and footfalls.
 - [Still image](shared-rig-run.png).
-- [Front comparison](shared-rig-front.png) — compare shoulder width, height, and silhouette at the same camera scale.
+- [Standing proportion comparison](shared-rig-proportions.png) — straight-on orthographic view with arms lowered to compare hip/shoulder widths and height.
+- [Front run pose](shared-rig-front.png).
 - [Interactive 3D viewer](viewer.html) — orbit the models, switch front/side views, pause, scrub, change speed, and display the skeletons. GitHub shows the HTML source; run it locally using the instructions below.
 - [Animated GLB](shared-rig.glb) — import into Blender or another glTF-compatible tool.
 - [Editable Blender scene](../../../art/characters/shared-rig/shared-rig.blend).
@@ -24,7 +25,7 @@ This is an isolated animation and proportion test; these models are not integrat
 
 The Blender scene contains **three compatible 62-bone armatures** and the **same Run Action**. Each template has its own rest proportions, while bone names, hierarchy, and local axes remain compatible. Upper-body joint offsets and bone lengths change with the template; mesh vertices and weighted accessories are rebased to match. The whole-character scales are approximately 0.9455, 1.00, and 1.0256 before the additional proportion changes. The viewer preserves those relative sizes.
 
-The small body's visible hip and shoulder widths are matched at approximately **120% of the medium body's hip width**. This uses the mesh outline, measured with arms lowered, rather than equating joint spacing with exterior width. Core head-to-sole body heights are approximately **95%, 100%, and 105%**: the small body gained the same absolute height that the large body lost. Separate hair and archery equipment do not set the body-height measurement.
+The small body's visible hip and shoulder widths match the **midpoint between the medium body's hip and shoulder widths**. With arms lowered, the medium hips measure 0.3621 and shoulders 0.4136 scene units; both small widths measure approximately 0.3879. This makes Katnip's shoulders about 6% narrower and hips about 7% wider than Midnight's. Core head-to-sole body heights remain approximately **95%, 100%, and 105%**. Separate hair and archery equipment do not set the body-height measurement.
 
 Gameplay collision dimensions are configured independently of these preview meshes. The current game uses a common 20×38 fighter body box; integrating the art should retain deliberate collision tuning rather than deriving hitboxes from hair, weapons, or mesh bounds.
 
@@ -38,7 +39,7 @@ The original authored run approached its starting pose without including a dupli
 
 These are **adapted prototype models**, based on Quaternius's CC0 modular characters. They demonstrate the shared animation workflow before final character modeling. Kat uses a female source mesh normalized to the compatible rig, with archer costume details. Midnight combines the suit with customized hair and beard. Brick has broader arms/chest, tactical trousers and boots, and a bandolier.
 
-New characters can use one of the three templates, replacing meshes, materials, hair, and accessories while preserving its binding conventions. The female source has a different native rest pose; the build converts its meshes to the common rest coordinates before applying the small profile. Its native animation is not mixed into the shared run.
+New characters can use one of the three templates, replacing meshes, materials, hair, and accessories while preserving its binding conventions. The female source has a different native rest pose; the build converts its meshes to the common rest coordinates before applying the small profile. This conversion aligns bone directions in armature coordinates and verifies limb endpoints, keeping the upper arms aligned from shoulder to elbow. Its native animation is not mixed into the shared run.
 
 ## Animation and proportion limits
 
@@ -67,7 +68,7 @@ With Blender 4.3 or later installed:
 blender -b --python scripts/build-shared-rig.py -- --preview
 ```
 
-This rebuilds the editable scene, animated GLB, metadata, poster, and quarter-cycle poses. It uses EEVEE with 16 samples by default. `--render` additionally writes 48 PNG frames under `art/characters/shared-rig/renders/`; those intermediate frames are ignored by Git. Cycles CPU is available with `--engine CYCLES --samples 32`; denoising is disabled for compatibility with this cloud build.
+This rebuilds the editable scene, animated GLB, metadata, poster, quarter-cycle poses, and standing proportion comparison. The standing pose is temporary and leaves the shared run unchanged. It uses EEVEE with 16 samples by default. `--render` additionally writes 48 PNG frames under `art/characters/shared-rig/renders/`; those intermediate frames are ignored by Git. Cycles CPU is available with `--engine CYCLES --samples 32`; denoising is disabled for compatibility with this cloud build.
 
 To capture the interactive 3D scene into GIF/video previews, install FFmpeg (including `ffprobe`) and Chromium, then run:
 

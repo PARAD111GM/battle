@@ -393,6 +393,51 @@ def render_frame(path, frame):
     bpy.ops.render.render(write_still=True)
 
 
+def render_proportion_comparison(rigs, camera):
+    """Compare body outlines in an orthographic front view with arms lowered.
+
+    This temporary review pose does not change the exported animation or the
+    editable scene. Restore every pose, action, location, and camera setting.
+    """
+    scene = bpy.context.scene
+    saved_frame, saved_subframe = scene.frame_current, scene.frame_subframe
+    camera_matrix, camera_scale = camera.matrix_world.copy(), camera.data.ortho_scale
+    saved = {key: (rig.animation_data.action, rig.location.copy(),
+                   {bone.name: bone.matrix_basis.copy() for bone in rig.pose.bones})
+             for key, rig in rigs.items()}
+    try:
+        for index, key in enumerate(('small', 'midnight', 'brick')):
+            rig = rigs[key]
+            rig.animation_data.action = None
+            rig.location = ((index - 1) * 1.65, 0, 0)
+            for bone in rig.pose.bones:
+                bone.matrix_basis = Matrix.Identity(4)
+        bpy.context.view_layer.update()
+        for rig in rigs.values():
+            for side, sign in [('L', 1), ('R', -1)]:
+                bone = rig.pose.bones['UpperArm.' + side]
+                pivot = bone.head.copy()
+                bone.matrix = (Matrix.Translation(pivot) @ Matrix.Rotation(sign * math.pi / 2, 4, 'Y')
+                               @ Matrix.Translation(-pivot) @ bone.matrix)
+        camera.location = (0, -9, 1.0)
+        aim(camera, (0, 0, 1.0))
+        camera.data.ortho_scale = 5.3
+        bpy.context.view_layer.update()
+        scene.render.filepath = str(DOCS / 'shared-rig-proportions.png')
+        bpy.ops.render.render(write_still=True)
+    finally:
+        for key, rig in rigs.items():
+            action, location, poses = saved[key]
+            rig.location = location
+            for name, basis in poses.items():
+                rig.pose.bones[name].matrix_basis = basis
+            rig.animation_data.action = action
+        camera.matrix_world = camera_matrix
+        camera.data.ortho_scale = camera_scale
+        scene.frame_set(saved_frame, subframe=saved_subframe)
+        bpy.context.view_layer.update()
+
+
 def main():
     options = arguments()
     ART.mkdir(parents=True, exist_ok=True)
@@ -447,6 +492,8 @@ def main():
     poses.mkdir(exist_ok=True)
     for index, frame in enumerate([0, 12, 24, 36]):
         render_frame(poses / f'quarter-{index}.png', frame)
+    render_proportion_comparison(rigs, camera)
+    assert digest(action_signature(action)) == prepared_signature, 'Review pose changed the prepared action'
     if options.render:
         frames = ART / 'renders'
         frames.mkdir(exist_ok=True)

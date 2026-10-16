@@ -6,7 +6,7 @@ Three body templates now share one run animation: **small female (Katnip Neverdo
 
 - [Watch the 3D run comparison](shared-rig/shared-rig-run.gif).
 - [60 fps video](shared-rig/shared-rig-run.mp4) and [side-view GIF](shared-rig/shared-rig-run-side.gif).
-- [Front comparison](shared-rig/shared-rig-front.png) for body proportions and silhouettes.
+- [Standing comparison](shared-rig/shared-rig-proportions.png) for body proportions and silhouettes, plus a [front run pose](shared-rig/shared-rig-front.png).
 - [Interactive viewer, editable models, source credits, and rebuild instructions](shared-rig/README.md).
 
 ## Mr. Midnight — second animation test
