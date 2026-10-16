@@ -20,8 +20,10 @@ from mathutils import Matrix, Vector
 
 PROFILES = {
     'small': {
-        'label': 'Small / female', 'uniform_scale': .89,
-        'shoulder_anchor_width': .88, 'hip_anchor_width': 1.36,
+        # Match exterior shoulder/hip widths, not just joint spacing. Core
+        # head-to-sole height is 95% of medium; hair/equipment do not set size.
+        'label': 'Small / female', 'uniform_scale': .9454754863,
+        'shoulder_anchor_width': 1.42, 'hip_anchor_width': 1.23,
         'lengths': {'Abdomen': .98, 'Torso': .97, 'Chest': .98,
                     'Shoulder': .92, 'UpperArm': .97, 'LowerArm': .97},
         'radial': {'Hips': 1.035, 'Abdomen': .96, 'Torso': .95,
@@ -34,7 +36,8 @@ PROFILES = {
         'lengths': {}, 'radial': {},
     },
     'large': {
-        'label': 'Large / muscular male', 'uniform_scale': 1.08,
+        # Lose the same .104898264 scene units that the small body gains.
+        'label': 'Large / muscular male', 'uniform_scale': 1.0255581096,
         'shoulder_anchor_width': 1.22, 'hip_anchor_width': 1.0,
         'lengths': {'Abdomen': 1.025, 'Torso': 1.04, 'Chest': 1.04,
                     'Neck': .94, 'Shoulder': 1.10,

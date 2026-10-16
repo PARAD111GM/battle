@@ -4,9 +4,9 @@ Three compatible humanoid rig templates reuse one run animation. From left to ri
 
 | Template | Test character | Body and costume |
 |---|---|---|
-| Small female | **Katnip Neverdo** | Compact woodland archer with wider hips and narrower shoulders than the two male templates; dark braid, olive jacket, bow, and quiver. An original Katniss-inspired parody. |
+| Small female | **Katnip Neverdo** | Woodland archer with balanced hip and shoulder widths and a slightly shorter body; dark braid, olive jacket, bow, and quiver. An original Katniss-inspired parody. |
 | Medium male | **Mr. Midnight** | Average build, dark suit, long hair, and beard. |
-| Large muscular male | **Brick Barrage** | Taller, broader shoulders and arms, tactical trousers, and bandolier. |
+| Large muscular male | **Brick Barrage** | Slightly taller body with broad shoulders and muscular arms, tactical trousers, and bandolier. |
 
 This is an isolated animation and proportion test; these models are not integrated into the game.
 
@@ -22,7 +22,11 @@ This is an isolated animation and proportion test; these models are not integrat
 
 ## What this verifies
 
-The Blender scene contains **three compatible 62-bone armatures** and the **same Run Action**. Each template has its own rest proportions, while bone names, hierarchy, and local axes remain compatible. Upper-body joint offsets and bone lengths change with the template; mesh vertices and weighted accessories are rebased to match. The whole-character scales are 0.89, 1.00, and 1.08 before the additional proportion changes. The viewer preserves those relative sizes.
+The Blender scene contains **three compatible 62-bone armatures** and the **same Run Action**. Each template has its own rest proportions, while bone names, hierarchy, and local axes remain compatible. Upper-body joint offsets and bone lengths change with the template; mesh vertices and weighted accessories are rebased to match. The whole-character scales are approximately 0.9455, 1.00, and 1.0256 before the additional proportion changes. The viewer preserves those relative sizes.
+
+The small body's visible hip and shoulder widths are matched at approximately **120% of the medium body's hip width**. This uses the mesh outline, measured with arms lowered, rather than equating joint spacing with exterior width. Core head-to-sole body heights are approximately **95%, 100%, and 105%**: the small body gained the same absolute height that the large body lost. Separate hair and archery equipment do not set the body-height measurement.
+
+Gameplay collision dimensions are configured independently of these preview meshes. The current game uses a common 20×38 fighter body box; integrating the art should retain deliberate collision tuning rather than deriving hitboxes from hair, weapons, or mesh bounds.
 
 These rigs share local animation transforms rather than identical final joint positions. The GLB contains one 0.8-second `Run` clip controlling all three independently placed characters, with a separate skin and bind matrices for each. Video frames are sampled directly from the rigged 3D scene at 60 fps; the GIF uses separate evenly spaced samples at 50 fps.
 
