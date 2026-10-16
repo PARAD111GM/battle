@@ -1,6 +1,23 @@
 # Character art and animation studies
 
-## Mr. Midnight — run cycle
+## Mr. Midnight — second animation test
+
+This attempt uses illustrated sprite frames based on Mr. Midnight in column **B** of the original style sheet. It keeps the character's face, suit, and proportions, with twelve poses in a 0.6-second run cycle. It is an animation approval test, not yet integrated into gameplay.
+
+**Motion review: this attempt does not yet pass.** The generated frames repeat the leading leg instead of establishing a clear opposite stride in the second half, so the loop can read as skipping. Frame alignment and timing are working, but those technical checks do not establish a convincing run. The next animation pass needs deliberately constructed alternating poses; changing the visual style alone will not correct the sequence.
+
+![Mr. Midnight's second run animation test](mr-midnight-run-v2.gif)
+
+- [Looping GIF](mr-midnight-run-v2.gif) — twelve poses at 20 fps.
+- [MP4 video](mr-midnight-run-v2.mp4) — six repeats. Download the raw file if GitHub does not preview it.
+- [Interactive HTML](mr-midnight-run-v2.html) — download the raw file and open it offline to pause, change speed, face either direction, or inspect individual poses. GitHub displays its source rather than running the page.
+- [Source sprite sheet](mr-midnight-run-v2-sheet.png) and [still frame](mr-midnight-run-v2.png).
+
+The source is raster artwork with the cel-shaded appearance of the sample sheet. Playback uses the twelve illustrated poses directly, with shared scale and frame-position corrections; it does not interpolate additional poses. The HTML embeds the source image and needs no network access.
+
+To reproduce the exports, install the repository dependencies, FFmpeg (including `ffprobe`), and Chromium, then run `node scripts/render-midnight-sprite-run.mjs`. Set `CHROMIUM_PATH` if Chromium is not at `/usr/bin/chromium`. The interactive page is also available at `/docs/art-direction/mr-midnight-run-v2.html` while `npm run dev` is running.
+
+## Earlier procedural vector run test
 
 A single vector animation study for approval: Mr. Midnight runs with a compact pistol carry, bent recovery knees, and movement in his hair, tie, and jacket tails.
 
