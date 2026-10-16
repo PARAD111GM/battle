@@ -20,7 +20,8 @@
     "test:input": "node tests/input-browser.mjs",
     "test:audio": "node tests/audio-browser.mjs",
     "test:editor": "node scripts/browser-editor.mjs",
-    "test:polish": "node scripts/browser-polish.mjs"
+    "test:polish": "node scripts/browser-polish.mjs",
+    "test:controls": "node scripts/browser-controls.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"

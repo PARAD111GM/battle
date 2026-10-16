@@ -126,7 +126,11 @@ See [DECISIONS.md](DECISIONS.md) for milestone evidence and scope choices. Optio
 
 Open **Arena Editor** from the main menu to copy a built-in arena or start a blank layout. Paint or erase tiles with a 1/3/5-cell brush, place props and spawn markers, and use undo/redo while experimenting. Moving props expose their travel distance. **Save JSON** downloads a validated arena; **Load JSON** imports one. **Test Arena** starts a match on a copy, so destruction does not alter the editable layout. Return to the editor from the test match to keep working. Imports reject oversized files, unknown materials, invalid geometry, blocked spawns, and unsafe prop values.
 
-**Settings** supports both keyboard players, mouse buttons, gamepad buttons/axes/deadzone, screen shake, hitstop, and separate master/SFX/music volume. Rebinding a used control swaps bindings. Settings use guarded localStorage; the game still works when browser storage is unavailable. Short action taps are buffered through hitstop. All audio is synthesized locally; click or press a key to unlock browser audio.
+Open **Controls → Customize Controls** from the main menu or pause menu to change bindings for both keyboard players, mouse buttons, and gamepad buttons/axes/deadzone. Select an action and press its new key; Escape cancels.
+
+Name your layout under **Saved control schemes** and choose **Save New**. Select a saved scheme to apply it, use **Save Changes** to update it after editing bindings, or **Rename** / **Delete** to manage it. Up to 16 named schemes are stored in this browser. Schemes include both keyboards, mouse bindings, and gamepad controls; audio and visual preferences stay independent. Current edits apply immediately and persist separately, so modifying controls does not overwrite a saved scheme until you save it. Resetting defaults keeps your saved schemes.
+
+**Settings** also provides these controls along with screen shake, hitstop, and separate master/SFX/music volume. Rebinding a used control swaps bindings. Settings use guarded localStorage; the game still works when browser storage is unavailable. Short action taps are buffered through hitstop. All audio is synthesized locally; click or press a key to unlock browser audio.
 
 Save a replay from pause or results and load it from the main menu. Replay files contain the arena, seed, initial fighters/settings, and compressed external input frames; deterministic bots make the same decisions on playback. Replays are versioned and validated, with bounded file size and duration. They are intended for the same game build; changing simulation rules can change old replay outcomes.
 
@@ -141,6 +145,7 @@ npm run test:ui             # Full menu and match flow; server must be running
 npm run test:bots           # Default one-human/three-bot browser smoke
 npm run test:editor         # Paint, props, JSON import/export, and disposable playtest
 npm run test:input          # Rebinding, short taps, and emulated gamepad input
+npm run test:controls       # Named schemes, reload persistence, and Controls/pause navigation
 npm run test:audio          # Synthesized sound, music, mute, and resource limits
 npm run test:polish         # Hitstop, effects, replay hooks, and rendering stress
 npm run test:standalone     # Build bundle first; blocks all external browser requests

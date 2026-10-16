@@ -1,5 +1,7 @@
 # Release validation
 
+Control-scheme update (2026-10-16): the production build and all 253 tests across 18 files pass. Browser checks cover named scheme save/select/update/rename/delete, duplicate-name errors, both keyboards and full mouse/gamepad restoration, reset behavior, storage persistence, audio/effect independence, capture cancellation when naming a scheme, actual rebound-key jumps for both players, and returning from Controls to the main menu or paused match. The existing full UI and input checks also pass. Run `npm run test:controls` against the development server to repeat the scheme workflow.
+
 Validated in the cloud workspace on 2026-10-15 with Node 24, npm 11, and Chromium 154. Milestones 1–5 each have a separate tested, playable commit; the final milestone includes the checks below.
 
 ## Automated checks

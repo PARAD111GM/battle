@@ -25,7 +25,7 @@ let lastControllerNotice = '';
 let recorder: ReplayRecorder | undefined;
 let playback: ReplayPlayback | undefined;
 let settingsPanel: SettingsPanel | undefined;
-let settingsReturn: 'pause' | 'menu' = 'menu';
+let settingsReturn: 'pause' | 'menu' | 'controls' = 'menu';
 const audio = new AudioEngine(settings.get().audio);
 function unlockAudio(): void { if (navigator.userActivation?.isActive) void audio.unlock(); }
 for (const gesture of ['pointerdown', 'keydown']) document.addEventListener(gesture, event => { if (event.isTrusted) unlockAudio(); }, { capture: true });
@@ -133,10 +133,11 @@ scene.onTick = () => {
   }
 };
 function showSettings(): void {
-  settingsReturn = playing ? 'pause' : 'menu'; scene.paused = true; input.reset(); audio.pause(true);
+  const fromControls = menu.screen === 'controls';
+  settingsReturn = fromControls ? 'controls' : playing ? 'pause' : 'menu'; scene.paused = true; input.reset(); audio.pause(true);
   menu.external('settings');
   settingsPanel?.destroy();
-  settingsPanel = new SettingsPanel(document.getElementById('overlay')!, () => { settingsPanel?.destroy(); settingsPanel = undefined; menu.show(settingsReturn); input.reset(); });
+  settingsPanel = new SettingsPanel(document.getElementById('overlay')!, () => { settingsPanel?.destroy(); settingsPanel = undefined; menu.show(settingsReturn); input.reset(); }, fromControls);
   settingsPanel.show();
 }
 function openEditor(): void {
