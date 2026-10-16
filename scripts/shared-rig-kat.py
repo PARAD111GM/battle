@@ -242,8 +242,8 @@ def _trouser_shape(point, rig):
     taper = _curve(p.z, [(.30, 1), (.42, .97), (.53, .84),
                         (.62, .84), (.72, .90), (.80, .96), (.86, 1)])
     p.x = center_x + (p.x - center_x) * taper
-    upper = _curve(p.z, [(.80, 1), (.85, 1.015), (.90, 1.038),
-                        (.95, 1.103), (.98, 1.125), (1.02, 1.02),
+    upper = _curve(p.z, [(.80, 1), (.85, 1.020), (.90, 1.045),
+                        (.94, 1.045), (.98, 1.035), (1.02, 1.02),
                         (1.045, 1)])
     p.x *= upper
     posterior = _curve(p.y, [(-.035, 0), (.025, 1)])
@@ -251,6 +251,74 @@ def _trouser_shape(point, rig):
                           (1.00, -.003), (1.04, 0)])
     p.y -= posterior * soften
     return p
+
+
+def _round_upper_hip(obj):
+    """Round the actual front outline across the waist-to-thigh transition.
+
+    Sparse source rings made a hard corner even with a smooth scale function.
+    Add only local pelvis edge cuts, carrying the existing deform weights, then
+    fit the outer silhouette to a cubic arc with matched endpoint tangents.
+    Inner-thigh geometry, depth, waistband and lower legs stay in place.
+    """
+    import bmesh
+    _style.weld_and_smooth(obj)
+    obj.data.calc_loop_triangles()
+    points = [v.co.copy() for v in obj.data.vertices]
+    triangles = [tuple(t.vertices) for t in obj.data.loop_triangles]
+
+    def outer_width(z):
+        intersections = []
+        for triangle in triangles:
+            vertices = [points[index] for index in triangle]
+            for a, b in zip(vertices, vertices[1:] + vertices[:1]):
+                if (a.z - z) * (b.z - z) < 0:
+                    intersections.append(abs(a.lerp(b, (z - a.z) / (b.z - a.z)).x))
+        return max(intersections)
+
+    low, peak, high = .80, .89, 1.03
+    step = .0001
+    def tangent(z):
+        return (outer_width(z + step) - outer_width(z - step)) / (2 * step)
+
+    knots = [(low, outer_width(low), tangent(low)), (peak, .204, 0),
+             (high, outer_width(high), tangent(high))]
+
+    def outline(z):
+        first, second = knots[:2] if z <= peak else knots[1:]
+        a, x0, slope0 = first
+        b, x1, slope1 = second
+        t = (z - a) / (b - a)
+        return ((2 * t**3 - 3 * t**2 + 1) * x0 +
+                (t**3 - 2 * t**2 + t) * (b - a) * slope0 +
+                (-2 * t**3 + 3 * t**2) * x1 +
+                (t**3 - t**2) * (b - a) * slope1)
+
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    original = set(bm.verts)
+    edges = [edge for edge in bm.edges
+             if all(.70 < vert.co.z < 1.05 for vert in edge.verts)]
+    bmesh.ops.subdivide_edges(bm, edges=edges, cuts=2, use_grid_fill=True)
+    deform = bm.verts.layers.deform.active
+    for vertex in bm.verts:
+        if vertex not in original:
+            weights = vertex[deform]
+            strongest = sorted(weights.items(), key=lambda pair: pair[1], reverse=True)[:4]
+            total = sum(weight for _, weight in strongest)
+            assert total > 1e-6, 'New pelvis vertex must retain skin weights'
+            weights.clear()
+            for group, weight in strongest:
+                weights[group] = weight / total
+        if low < vertex.co.z < high:
+            width = outer_width(vertex.co.z)
+            lateral = _curve(abs(vertex.co.x) / width, [(.55, 0), (.85, 1)])
+            side = 1 if vertex.co.x >= 0 else -1
+            vertex.co.x += side * lateral * (outline(vertex.co.z) - width)
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
 
 
 def _sample_path(points, intervals):
@@ -361,6 +429,7 @@ def style_character(character, rig, meshes):
         elif part == 'Legs':
             for vert in obj.data.vertices:
                 vert.co = _trouser_shape(vert.co, rig)
+            _round_upper_hip(obj)
             # The lower trouser cuff becomes a matching boot shaft. Keeping
             # source geometry and weights avoids a shoe/ankle gap during runs.
             obj.data.materials.append(palette['boots'])

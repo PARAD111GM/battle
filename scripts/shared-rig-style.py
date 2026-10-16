@@ -164,6 +164,85 @@ def bulk_body(obj, rig):
             vertex.co = p+delta/total
 
 
+def _contour_curve(value, knots):
+    """Smooth rest-space fit, with zero slope at each measured station."""
+    if value <= knots[0][0]:
+        return knots[0][1]
+    for (a, first), (b, second) in zip(knots, knots[1:]):
+        if value <= b:
+            t = (value - a) / (b - a)
+            return first + (second - first) * t * t * (3 - 2 * t)
+    return knots[-1][1]
+
+
+def tailor_midnight_body(obj, rig):
+    """Fit a lean male torso and sleeves around the existing rest skeleton.
+
+    The shoulder caps, neckline, jacket hem and cuff seams retain their source
+    positions. Small rib/chest volume and a mild waist taper give the suit a
+    natural outline without changing the broadness or height of the rig.
+    """
+    for vertex in obj.data.vertices:
+        p = vertex.co.copy()
+        if abs(p.x) < .20 and 1.035 < p.z < 1.405:
+            lateral = 1 - _contour_curve(abs(p.x), [(.145, 0), (.20, 1)])
+            width = _contour_curve(p.z, [(1.035, 1), (1.08, .99),
+                         (1.17, .97), (1.23, .975), (1.28, 1.02),
+                         (1.34, 1.065), (1.38, 1.045), (1.405, 1)])
+            depth = _contour_curve(p.z, [(1.035, 1), (1.17, .975),
+                         (1.24, .99), (1.34, 1.025), (1.405, 1)])
+            p.x *= 1 + (width - 1) * lateral
+            p.y += (p.y + .06) * (depth - 1) * lateral
+        side = 'L' if p.x >= 0 else 'R'
+        bone = rig.data.bones['LowerArm.' + side]
+        axis = bone.tail_local - bone.head_local
+        t = (p - bone.head_local).dot(axis) / axis.length_squared
+        if 0 < t < 1:
+            center = bone.head_local + axis * t
+            radial = p - center
+            # Only the forearm sleeve; hands and torso fall outside this
+            # small cylinder. The endpoints keep elbow and cuff seams fixed.
+            if radial.length < .105:
+                factor = _contour_curve(t, [(0, 1), (.20, 1.035),
+                            (.40, 1.05), (.70, .97), (.88, .95), (1, 1)])
+                p += radial * (factor - 1)
+        vertex.co = p
+
+
+def tailor_midnight_trousers(obj, rig):
+    """Replace flared calves with a modest calf and tapered suit cuffs.
+
+    The sparse source has long, straight calf faces. Interpolate just those
+    edges before fitting the curve; bmesh keeps the deform weights and cloth
+    material slots. Hips and waistband, plus shoes, retain their geometry.
+    """
+    weld_and_smooth(obj)
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    edges = [edge for edge in bm.edges
+             if max(vertex.co.z for vertex in edge.verts) < .61
+             and abs(edge.verts[0].co.z - edge.verts[1].co.z) > .075]
+    bmesh.ops.subdivide_edges(bm, edges=edges, cuts=3, use_grid_fill=True)
+    bm.to_mesh(obj.data)
+    bm.free()
+    for vertex in obj.data.vertices:
+        p = vertex.co.copy()
+        if p.z >= .85:
+            continue
+        side = 'L' if p.x >= 0 else 'R'
+        bone = rig.data.bones[('LowerLeg.' if p.z < .53325 else 'UpperLeg.') + side]
+        axis = bone.tail_local - bone.head_local
+        t = (p.z - bone.head_local.z) / axis.z
+        center = bone.head_local + axis * t
+        radial = _contour_curve(p.z, [(.12, .68), (.17, .68), (.23, .74),
+                     (.31, .88), (.40, 1.04), (.45, 1.01), (.50, .96),
+                     (.56, .95), (.65, .94), (.76, .975), (.85, 1)])
+        p.x = center.x + (p.x - center.x) * radial
+        p.y = center.y + (p.y - center.y) * radial
+        vertex.co = p
+    obj.data.update()
+
+
 def bandolier(rig, webbing, brass):
     centers = [Vector(v) for v in [(-.13,-.216,1.46),(-.07,-.229,1.35),(.035,-.218,1.23),(.15,-.190,1.10)]]
     vertices, faces, weights = [], [], []
@@ -241,6 +320,10 @@ def style_character(character_id, rig, meshes):
                 bulk_body(obj,rig)
             elif is_legs:
                 bulk_body(obj,rig)
+        elif is_body:
+            tailor_midnight_body(obj, rig)
+        elif is_legs:
+            tailor_midnight_trousers(obj, rig)
         if is_head:
             if is_midnight:
                 beard=material('Midnight_Beard',(.014,.016,.020),.84)

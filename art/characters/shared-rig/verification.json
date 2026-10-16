@@ -178,8 +178,8 @@
         "Foot.R": 0.1231415867805481,
         "PT.R": 0.1231415644288063
       },
-      "mesh_vertices": 5664,
-      "rebased_weighted_vertices": 5664,
+      "mesh_vertices": 6898,
+      "rebased_weighted_vertices": 6898,
       "max_mesh_rest_displacement": 0.024047450664973952
     },
     "midnight": {
@@ -334,9 +334,9 @@
         "Foot.R": 0.1231415793299675,
         "PT.R": 0.1231415644288063
       },
-      "mesh_vertices": 4475,
-      "rebased_weighted_vertices": 4475,
-      "max_mesh_rest_displacement": 3.626374460350858e-07
+      "mesh_vertices": 4595,
+      "rebased_weighted_vertices": 4595,
+      "max_mesh_rest_displacement": 2.672100639407232e-07
     },
     "brick": {
       "id": "large",
@@ -538,10 +538,10 @@
     },
     "meshes": [
       {
-        "name": "Casual_Body",
-        "vertices": 5338,
-        "max_vertex_displacement": 0.11230614884089182,
-        "max_source_weight_sum_error": 3.818422555923462e-08
+        "name": "Casual_Head",
+        "vertices": 5122,
+        "max_vertex_displacement": 0.0020615095391441772,
+        "max_source_weight_sum_error": 2.9802322387695312e-08
       },
       {
         "name": "Casual_Legs",
@@ -550,16 +550,16 @@
         "max_source_weight_sum_error": 3.725290298461914e-08
       },
       {
-        "name": "Casual_Head",
-        "vertices": 5122,
-        "max_vertex_displacement": 0.0020615095391441772,
-        "max_source_weight_sum_error": 2.9802322387695312e-08
-      },
-      {
         "name": "Casual_Feet",
         "vertices": 1082,
         "max_vertex_displacement": 0.024783399468929167,
         "max_source_weight_sum_error": 2.9802322387695312e-08
+      },
+      {
+        "name": "Casual_Body",
+        "vertices": 5338,
+        "max_vertex_displacement": 0.11230614884089182,
+        "max_source_weight_sum_error": 3.818422555923462e-08
       }
     ],
     "skipped_unbound_meshes": [
@@ -851,8 +851,8 @@
         {
           "name": "Small_Katnip_Legs",
           "source_mesh": "Casual_Legs",
-          "vertices": 355,
-          "faces": 706
+          "vertices": 1589,
+          "faces": 3138
         },
         {
           "name": "Small_Katnip_Braid_1",
@@ -1011,8 +1011,8 @@
         {
           "name": "Midnight_Legs",
           "source_mesh": "Suit_Legs",
-          "vertices": 369,
-          "faces": 734
+          "vertices": 489,
+          "faces": 854
         },
         {
           "name": "Midnight_Head",
@@ -1071,8 +1071,8 @@
       ],
       "poster_world_bounds": {
         "min": [
-          -0.28236261010169983,
-          -0.33201923966407776,
+          -0.2830517292022705,
+          -0.33074647188186646,
           -0.0030002782586961985
         ],
         "max": [

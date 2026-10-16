@@ -394,7 +394,7 @@ def render_frame(path, frame):
 
 
 def render_proportion_comparison(rigs, camera):
-    """Render the lineup and matching front/side studies of Katnip's outline.
+    """Render the lineup and matching front/side character silhouette studies.
 
     This temporary review pose does not change the exported animation or the
     editable scene. Restore poses, actions, visibility, and render settings.
@@ -438,26 +438,27 @@ def render_proportion_comparison(rigs, camera):
 
         # Portrait studies use identical framing, scale, and ground height so
         # the front silhouette and side depth can be compared directly.
-        for key, objects in character_objects.items():
-            for obj in objects:
-                obj.hide_render = key != 'small' or visibility[obj]
-        small = rigs['small']
-        small.location = (0, 0, 0)
         scene.render.resolution_x = 900
         scene.render.resolution_y = 1100
         scene.render.resolution_percentage = 100
         camera.data.ortho_scale = 2.35
-        for view, position, arm_angle, forward_angle in [
-            ('front', (0, -9, .96), math.pi / 4, 0),
-            # A slight forward arm angle reveals the waist and hip contour.
-            ('side', (9, 0, .96), math.radians(85), math.radians(-12)),
-        ]:
-            set_review_pose(small, arm_angle, forward_angle)
-            camera.location = position
-            aim(camera, (0, 0, .96))
-            bpy.context.view_layer.update()
-            scene.render.filepath = str(DOCS / f'katnip-proportions-{view}.png')
-            bpy.ops.render.render(write_still=True)
+        for character, filename in [('small', 'katnip'), ('midnight', 'midnight')]:
+            for key, objects in character_objects.items():
+                for obj in objects:
+                    obj.hide_render = key != character or visibility[obj]
+            rig = rigs[character]
+            rig.location = (0, 0, 0)
+            for view, position, arm_angle, forward_angle in [
+                ('front', (0, -9, .96), math.pi / 4, 0),
+                # A slight forward arm angle reveals the waist and hip contour.
+                ('side', (9, 0, .96), math.radians(85), math.radians(-12)),
+            ]:
+                set_review_pose(rig, arm_angle, forward_angle)
+                camera.location = position
+                aim(camera, (0, 0, .96))
+                bpy.context.view_layer.update()
+                scene.render.filepath = str(DOCS / f'{filename}-proportions-{view}.png')
+                bpy.ops.render.render(write_still=True)
     finally:
         for key, rig in rigs.items():
             action, location, poses = saved[key]

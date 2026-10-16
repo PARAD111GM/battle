@@ -17,6 +17,7 @@ This is an isolated animation and proportion test; these models are not integrat
 - [Still image](shared-rig-run.png).
 - [Standing proportion comparison](shared-rig-proportions.png) — straight-on orthographic view with arms lowered to compare hip/shoulder widths and height.
 - Katnip's reference-guided silhouette: [front](katnip-proportions-front.png) and [side](katnip-proportions-side.png), at the same camera scale.
+- Mr. Midnight's medium body study: [front](midnight-proportions-front.png) and [side](midnight-proportions-side.png), using the same framing.
 - [Front run pose](shared-rig-front.png).
 - [Interactive 3D viewer](viewer.html) — orbit the models, switch front/side views, pause, scrub, change speed, and display the skeletons. GitHub shows the HTML source; run it locally using the instructions below.
 - [Animated GLB](shared-rig.glb) — import into Blender or another glTF-compatible tool.
@@ -26,7 +27,7 @@ This is an isolated animation and proportion test; these models are not integrat
 
 The Blender scene contains **three compatible 62-bone armatures** and the **same Run Action**. Each template has its own rest proportions, while bone names, hierarchy, and local axes remain compatible. Upper-body joint offsets and bone lengths change with the template; mesh vertices and weighted accessories are rebased to match. The whole-character scales are approximately 0.9455, 1.00, and 1.0256 before the additional proportion changes. The viewer preserves those relative sizes.
 
-The small body's visible hip and shoulder widths sit near the **midpoint between the medium body's hip and shoulder widths**. With arms lowered, the medium hips measure 0.3621 and shoulders 0.4136 scene units; Katnip measures 0.3879 at the shoulders and 0.3868 at the hips. This makes her shoulders about 6% narrower and hips about 7% wider than Midnight's. The reference-guided contour pass preserves her waist width and raises the widest thigh section from roughly 41% to 48% of body height. Core head-to-sole body heights remain approximately **95%, 100%, and 105%**. Separate hair and archery equipment do not set the body-height measurement.
+Katnip's visible shoulder and hip widths remain closely balanced at approximately **0.388 scene units**, with a gradual rounded transition from waist to upper thigh. Mr. Midnight has a lean chest-to-waist taper and trousers that narrow from calf to ankle. Hip comparisons use the pelvis contour; trouser cuff width is measured separately. Core head-to-sole body heights remain approximately **95%, 100%, and 105%**. Separate hair and equipment do not set the body-height measurement.
 
 Gameplay collision dimensions are configured independently of these preview meshes. The current game uses a common 20×38 fighter body box; integrating the art should retain deliberate collision tuning rather than deriving hitboxes from hair, weapons, or mesh bounds.
 
@@ -38,7 +39,9 @@ The original authored run approached its starting pose without including a dupli
 
 ## Art status
 
-These are **adapted prototype models**, based on Quaternius's CC0 modular characters. They demonstrate the shared animation workflow before final character modeling. Kat uses a female source mesh normalized to the compatible rig, with archer costume details. Her silhouette follows the supplied front and side proportion references: a defined waist, fuller upper thighs, and more natural chest and pelvis contours under the jacket and trousers. Midnight combines the suit with customized hair and beard. Brick has broader arms/chest, tactical trousers and boots, and a bandolier.
+These are **adapted prototype models**, based on Quaternius's CC0 modular characters. They demonstrate the shared animation workflow before final character modeling. Kat uses a female source mesh normalized to the compatible rig, with archer costume details. Her silhouette follows the supplied front and side proportion references: a defined waist, rounded upper hips, fuller upper thighs, and natural chest and pelvis contours under the jacket and trousers. Midnight's medium body follows the lean male references while retaining his suit, hair, and beard. Brick has broader arms/chest, tactical trousers and boots, and a bandolier.
+
+Local mesh subdivisions provide enough geometry for Katnip's hip arc and Midnight's calf contour. New vertices inherit interpolated skin weights, normalized to at most four bone influences. These contour edits preserve the skeletons and shared animation.
 
 New characters can use one of the three templates, replacing meshes, materials, hair, and accessories while preserving its binding conventions. The female source has a different native rest pose; the build converts its meshes to the common rest coordinates before applying the small profile. This conversion aligns bone directions in armature coordinates and verifies limb endpoints, keeping the upper arms aligned from shoulder to elbow. Its native animation is not mixed into the shared run.
 
@@ -71,7 +74,7 @@ With Blender 4.3 or later installed:
 blender -b --python scripts/build-shared-rig.py -- --preview
 ```
 
-This rebuilds the editable scene, animated GLB, metadata, poster, quarter-cycle poses, standing proportion comparison, and Katnip's front/side silhouette views. The review poses are temporary and leave the shared run unchanged. It uses EEVEE with 16 samples by default. `--render` additionally writes 48 PNG frames under `art/characters/shared-rig/renders/`; those intermediate frames are ignored by Git. Cycles CPU is available with `--engine CYCLES --samples 32`; denoising is disabled for compatibility with this cloud build.
+This rebuilds the editable scene, animated GLB, metadata, poster, quarter-cycle poses, standing proportion comparison, and front/side silhouette views for Katnip and Mr. Midnight. The review poses are temporary and leave the shared run unchanged. It uses EEVEE with 16 samples by default. `--render` additionally writes 48 PNG frames under `art/characters/shared-rig/renders/`; those intermediate frames are ignored by Git. Cycles CPU is available with `--engine CYCLES --samples 32`; denoising is disabled for compatibility with this cloud build.
 
 To capture the interactive 3D scene into GIF/video previews, install FFmpeg (including `ffprobe`) and Chromium, then run:
 
