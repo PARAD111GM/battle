@@ -1,4 +1,21 @@
-# Character style comparison
+# Character art and animation studies
+
+## Mr. Midnight — run cycle
+
+A single vector animation study for approval: Mr. Midnight runs with a compact pistol carry, bent recovery knees, and movement in his hair, tie, and jacket tails.
+
+![Mr. Midnight's looping vector run cycle](mr-midnight-run.gif)
+
+- [Looping GIF](mr-midnight-run.gif) — quick preview, 50 fps.
+- [MP4 video](mr-midnight-run.mp4) — 60 fps, six repeats of the 0.8-second cycle. On GitHub, download the raw file to play it if the video does not preview.
+- [Interactive HTML](mr-midnight-run.html) — download the raw file and open it in a browser. It runs offline and supports pause, half speed, frame scrubbing, and facing left or right. GitHub displays its source rather than running the page.
+- [Still frame](mr-midnight-run.png).
+
+These are isolated review assets; the character and animation are not integrated into gameplay yet. The HTML contains the original SVG artwork and animation rig, with no external assets or libraries. It respects the browser's reduced-motion preference by starting paused.
+
+To view the interactive study from a local checkout, run `npm install` and `npm run dev`, then open `/docs/art-direction/mr-midnight-run.html` on the Vite server. To regenerate the exports, install FFmpeg (including `ffprobe`) and Chromium, then run `node scripts/render-midnight-run.mjs`. Set `CHROMIUM_PATH` if Chromium is not at `/usr/bin/chromium`.
+
+## Character style comparison
 
 This is an art-direction proposal awaiting approval. It is not integrated into the game.
 

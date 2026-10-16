@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mr. Midnight — vector run study</title>
+<style>
+:root{color-scheme:light;font-family:Arial,Helvetica,sans-serif;color:#20212a;background:#dedbd5}*{box-sizing:border-box}body{margin:0;padding:24px}main{max-width:960px;margin:auto;background:#eeeae3;border:1px solid #c9c4ba;box-shadow:0 16px 60px #20212a12}#scene{display:block;width:100%;height:auto}button,select,input{font:inherit}button,select{border:1px solid #9f9c96;background:#f8f5ef;color:#25262e;padding:11px 15px;font-size:12px;border-radius:3px;cursor:pointer}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #d56e36;outline-offset:3px}button[aria-pressed=true]{background:#242731;color:#faf7f0;border-color:#242731}.controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:18px 32px;border-top:1px solid #cec8bc;background:#e8e3da}.controls label{display:flex;gap:8px;align-items:center;font-size:11px}.scrub{flex:1;min-width:170px}.scrub input{width:100%;accent-color:#c75f2a}.note{margin:0;padding:0 32px 20px;background:#e8e3da;color:#65615b;font-size:12px;line-height:1.6}.note a{color:#854320}svg text{font-family:Arial,Helvetica,sans-serif}svg .outline{stroke:#14171e;stroke-width:2.7;stroke-linejoin:round;stroke-linecap:round}svg .seam{fill:none;stroke-linecap:round;stroke-linejoin:round}@media(max-width:560px){body{padding:0}main{border:0}.controls{padding:14px;gap:8px}.note{padding:0 14px 16px}.scrub{flex-basis:100%}button,select{padding:9px 11px}}
+</style>
+</head>
+<body><main>
+<svg id="scene" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" role="img" aria-labelledby="title description">
+<title id="title">Mr. Midnight running — vector animation test</title><desc id="description">A dark-haired, bearded action hero in a charcoal suit runs to the right holding a pistol low. His feet plant, knees bend and his jacket and hair follow the movement.</desc>
+<defs>
+ <linearGradient id="paper" x2="0" y2="1"><stop stop-color="#f1eee7"/><stop offset="1" stop-color="#e3ded3"/></linearGradient>
+ <radialGradient id="pool"><stop stop-color="#fdfaf5"/><stop offset="1" stop-color="#fdfaf5" stop-opacity="0"/></radialGradient>
+ <linearGradient id="cloth" x2="1" y2="0"><stop stop-color="#252b35"/><stop offset=".55" stop-color="#424a56"/><stop offset="1" stop-color="#252b35"/></linearGradient>
+ <linearGradient id="skin" x2="1" y2=".5"><stop stop-color="#bc8d70"/><stop offset=".55" stop-color="#dfb69a"/><stop offset="1" stop-color="#c99a7d"/></linearGradient>
+ <filter id="shadow-soft" x="-50%" y="-100%" width="200%" height="300%"><feGaussianBlur stdDeviation="4"/></filter>
+</defs>
+<rect width="960" height="640" fill="url(#paper)"/>
+<ellipse cx="482" cy="345" rx="315" ry="230" fill="url(#pool)"/>
+<path d="M32 112H928M32 588H928" stroke="#c7c0b4"/>
+<path d="M32 32h8v55h-8" fill="#ce632d"/>
+<text x="56" y="47" fill="#8a8175" font-size="11" font-weight="700" letter-spacing="3">RIVETFALL / MOTION STUDY 01</text>
+<text x="54" y="84" fill="#24262d" font-size="34" font-weight="900" letter-spacing="-1">MR. MIDNIGHT</text>
+<text x="928" y="47" text-anchor="end" fill="#777064" font-size="11" font-weight="700" letter-spacing="2">VECTOR ART</text>
+<text x="928" y="78" text-anchor="end" fill="#252731" font-size="16" font-weight="700">THE PROFESSIONAL</text>
+<path d="M92 547H868" stroke="#aaa494" stroke-width="1.5"/>
+<path id="ground-track" d="M32 565H928" stroke="#aaa494" stroke-width="2" stroke-dasharray="16 96" opacity=".5"/>
+<ellipse id="floor-shadow" cx="482" cy="547" rx="83" ry="8" fill="#363139" opacity=".14" filter="url(#shadow-soft)"/>
+<ellipse id="contact-near" cy="547" rx="24" ry="2.4" fill="#26252b" opacity="0"/>
+<ellipse id="contact-far" cy="547" rx="23" ry="2.2" fill="#26252b" opacity="0"/>
+<g id="orientation">
+<g id="character">
+ <g id="far-arm-upper" class="outline"><path d="M-12 -5Q-16 12-13 33L-9 55Q0 61 10 54L12 13 7-5Z" fill="#202630"/><path d="M-9 3L-6 35 0 49" fill="none" stroke="#434b58" stroke-width="3"/></g>
+ <g id="far-arm-lower" class="outline"><path d="M-10 -4Q-13 17-8 46L8 46Q10 18 10 0Z" fill="#242b36"/><path d="M-8 39L8 40 8 47-8 47Z" fill="#d4d4d0"/><path d="M-7 45Q-10 49-7 57L3 63 12 58 10 47Z" fill="#bd9075"/><path d="M0 52L6 56M-4 55L2 59" fill="none" stroke="#785748" stroke-width="1.4"/></g>
+ <g id="far-thigh" class="outline"><path d="M-18 -7L17 -8 14 40 11 85Q0 94-13 84L-19 28Z" fill="#202630"/><path d="M8 5L5 49 6 78" fill="none" stroke="#353d49" stroke-width="4"/><path d="M-11 64L2 78 9 79" fill="none" stroke="#151a23" stroke-width="2"/></g>
+ <g id="far-shin" class="outline"><path d="M-13 -4Q2-12 12-1L9 84-10 85-16 38Z" fill="#1f2630"/><path d="M5 12L1 65 6 80" fill="none" stroke="#363e4a" stroke-width="4"/><path d="M-10 75L8 76 9 85-10 86Z" fill="#171d26"/></g>
+ <g id="far-foot" class="outline"><path d="M-14 -9L9-10 13-2Q31-3 39 7L38 12-19 12-19 2Z" fill="#171b22"/><path d="M-17 10L38 10 38 14-19 14Z" fill="#11151c"/><path d="M11 1Q25 0 31 5M-12-5L5-5" fill="none" stroke="#4a505a" stroke-width="2"/></g>
+ <g id="jacket-tails" class="outline"><path id="back-tail" fill="#202630"/><path id="front-tail" fill="#363f4b"/></g>
+ <g id="near-thigh" class="outline"><path d="M-19 -9Q-4-15 16-8L17 31 12 83Q2 94-13 84L-18 34Z" fill="#323a46"/><path d="M-8-2L0 22 4 65 8 76-2 69-8 31Z" fill="#48515e" stroke="none"/><path d="M-12 66L-2 74 9 76M-12 75L-2 81" fill="none" stroke="#1d2430" stroke-width="2"/></g>
+ <g id="near-shin" class="outline"><path d="M-13 -5Q0-11 12-3L13 30 9 85-11 85-15 33Z" fill="#303845"/><path d="M-5 11L2 7 5 65-1 79-6 76Z" fill="#47515f" stroke="none"/><path d="M-11 74L-2 80 9 77M-7 68L3 72" fill="none" stroke="#1c2330" stroke-width="2"/><path d="M-11 82L9 82 9 88-11 88Z" fill="#202833"/></g>
+ <g id="near-foot" class="outline"><path d="M-14 -10L10-10 13-2Q30-3 40 7L39 12-20 12-19 1Z" fill="#242932"/><path d="M-19 10L39 10 39 15-20 15Z" fill="#121720"/><path d="M12 0Q28 0 33 5M-11-5L6-5" fill="none" stroke="#626873" stroke-width="2"/><path d="M3-4L10-1M0-1L8 2" stroke="#131820" stroke-width="1.5"/></g>
+ <g id="torso" class="outline">
+  <path d="M-18-112L18-112 38-94 35-60 25-9 28 14 5 7-17 13-30-10-37-68-38-93Z" fill="url(#cloth)"/>
+  <path d="M-17-108L16-111 25-97 5-47-11-74Z" fill="#e7e5df"/>
+  <path d="M-8-110L2-99-3-83-17-105M8-111L20-101 9-90 2-99Z" fill="#f8f5ed" stroke="#b5b6b6" stroke-width="1.3"/>
+  <path d="M-4-99L5-101 11-92 3-84-3-87Z" fill="#1b212b"/>
+  <path id="tie" d="M-2-86L4-85 12-52 7-41 0-50Z" fill="#262d36"/>
+  <path d="M-22-108L-9-95-14-81-2-72-9-46-29-84Z" fill="#454f5d"/>
+  <path d="M20-109L31-96 18-81 23-71 9-48 1-37 13-83Z" fill="#505a67"/>
+  <path d="M-28-80L-23-37-16-14M29-76L21-29" fill="none" stroke="#57616e" stroke-width="2"/>
+  <path d="M-25-28L-10-30-9-24-24-22Z" fill="#202630" stroke-width="1.5"/>
+  <path d="M18-80L29-78 29-73 17-75Z" fill="#1b222c" stroke-width="1.4"/>
+  <path d="M20-81L23-87 27-80Z" fill="#e4e0d8" stroke="none"/>
+  <circle cx="7" cy="-27" r="2" fill="#9399a0" stroke="#171d27" stroke-width="1"/>
+  <path d="M-17 2Q-5-4 8 0L9 9-17 11Z" fill="#191f29" stroke="none"/>
+ </g>
+ <g id="head" class="outline">
+  <path id="hair-back" d="M-26-65Q-47-50-36-22L-42-7-25-12-30 5-8-4 12-28 2-72Z" fill="#17191f"/>
+  <path d="M-10-27L17-26 16 4 4 10-11 0Z" fill="#bd8c71"/>
+  <path d="M-24-67Q-12-81 8-74L25-63 27-45 36-34 28-28 28-13 13-3-10-10-24-30Z" fill="url(#skin)"/>
+  <path d="M6-67L19-60 20-46 25-33 18-29 20-18 8-13-4-21-4-38Z" fill="#e9c3a5" stroke="none"/>
+  <path d="M-24-46Q-35-54-33-38L-25-28-18-34Z" fill="#c29477" stroke-width="1.7"/>
+  <path d="M-29-43L-23-40-27-35" fill="none" stroke="#865b4c" stroke-width="1.7"/>
+  <path d="M-20-36L-12-29-4-31 4-24 16-26 27-23 27-10 13-1-8-9-19-19Z" fill="#222329"/>
+  <path d="M1-24L15-24 21-21 16-17 5-18Z" fill="#b5856c" stroke="none"/>
+  <path d="M4-21L17-20M-11-15L-4-10M16-10L20-13" fill="none" stroke="#0f141d" stroke-width="1.5"/>
+  <path d="M-4-47L7-49 9-44-1-43Z" fill="#e9e4dc" stroke-width="1.2"/><path d="M13-48L25-46 22-41 13-43Z" fill="#eee9dd" stroke-width="1.2"/>
+  <path d="M2-48V-44M20-46V-42" stroke="#11161e" stroke-width="3"/>
+  <path d="M-6-51L6-54 10-49M12-53L26-49" fill="none" stroke="#202126" stroke-width="4"/>
+  <path d="M19-42L18-34 24-31" fill="none" stroke="#9e6b55" stroke-width="1.7"/>
+  <path d="M-33-35L-29-61-38-51-30-70Q-8-92 17-79L28-71 18-60 9-63-7-48-17-40-12-62-25-46-24-28Z" fill="#202126"/>
+  <path d="M-26-67Q-10-80 9-76M-24-57Q-7-67 6-73M-18-48L-8-59M-31-30L-33-15" fill="none" stroke="#4a4647" stroke-width="2.3"/>
+  <path d="M-28-58Q-9-65 5-77" fill="none" stroke="#343338" stroke-width="4"/>
+ </g>
+ <g id="near-arm-upper" class="outline"><path d="M-13 -7Q-3-14 10-7L16 13 11 48Q3 60-10 52L-15 16Z" fill="#38414f"/><path d="M-7-3L-7 24-1 43 6 45 4 15Z" fill="#515c69" stroke="none"/><path d="M-10 41L1 48 10 45" fill="none" stroke="#1c2530" stroke-width="2"/></g>
+ <g id="near-arm-lower" class="outline"><path d="M-11 -4Q-2-11 10-3L11 20 8 43-8 43-13 15Z" fill="#353e4c"/><path d="M-5 4L1 10 3 35" fill="none" stroke="#596371" stroke-width="3"/><path d="M-9 38L9 38 9 47-8 48Z" fill="#eee9df" stroke-width="1.8"/><circle cx="6" cy="43" r="1.2" fill="#8b8d91" stroke="none"/></g>
+ <g id="armed-hand" class="outline">
+  <path d="M-5-4L8-5 12 4 7 16-2 16-8 8Z" fill="#cda184"/>
+  <g id="pistol"><path d="M2-12L47-12 50-8 48-1 24-1 19 3 13 19 4 16 9 0 1-2Z" fill="#262d36" stroke-width="2.3"/><path d="M4-12H45V-7H4Z" fill="#59616b" stroke-width="1.5"/><path d="M45-12H50V-3H46Z" fill="#1a2029" stroke-width="1.5"/><path d="M5-15H11V-12H5M38-15H42V-12H38" fill="#171c24" stroke-width="1"/><path d="M19 1Q28 1 23 10H17" fill="none" stroke="#171d25" stroke-width="2.5"/><path d="M9 4L15 6 11 15 6 13Z" fill="#141b24" stroke-width="1"/><path d="M8-9V-6M12-9V-6M16-9V-6" stroke="#222a35" stroke-width="1.2"/></g>
+  <path d="M-4-2Q4-4 8 2L9 11 4 14-4 11Z" fill="#d7ae90" stroke-width="1.8"/><path d="M0 3L6 5M-1 7L5 9" fill="none" stroke="#946c58" stroke-width="1.3"/>
+ </g>
+</g></g>
+<text x="32" y="616" fill="#655f56" font-size="10" letter-spacing="2" font-weight="700">RUN CYCLE / ORIGINAL ACTION PARODY</text>
+<text x="928" y="616" text-anchor="end" fill="#655f56" font-size="10" letter-spacing="2">ART &amp; MOVEMENT APPROVAL TEST</text>
+</svg>
+<div class="controls"><button id="play" type="button" aria-pressed="true">Pause</button><label>Speed <select id="speed" aria-label="Playback speed"><option value="0.5">Half speed</option><option value="1" selected>Normal</option><option value="1.5">1.5×</option></select></label><button id="direction" type="button">Face left</button><label class="scrub">Frame <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub run cycle"></label></div>
+<p class="note">A single movement study for approval. Try half speed to inspect the footfalls, or pause and scrub through the poses. This preview runs offline and does not change the game.</p>
+</main>
+<script>
+(() => {
+'use strict';
+const CYCLE=.8, TAU=Math.PI*2, FLOOR=547, X=482;
+const state={time:0,phase:0,speed:1,facing:1,paused:matchMedia('(prefers-reduced-motion: reduce)').matches};
+const el=id=>document.getElementById(id), rad=degrees=>degrees*Math.PI/180;
+const fmt=n=>Number(n.toFixed(4));
+const translate=(id,x,y,angle=0)=>el(id).setAttribute('transform',`translate(${fmt(x)} ${fmt(y)}) rotate(${fmt(angle)})`);
+const rotate=(x,y,a)=>({x:x*Math.cos(a)-y*Math.sin(a),y:x*Math.sin(a)+y*Math.cos(a)});
+const bone=(id,a,b)=>translate(id,a.x,a.y,Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI-90);
+const cubic=(a,b,c,d,t)=>a*(1-t)**3+3*b*t*(1-t)**2+3*c*t*t*(1-t)+d*t**3;
+const smooth=t=>t*t*(3-2*t);
+function foot(p){
+ const stance=p<.38;
+ let x,y,angle;
+ if(stance){const t=p/.38;x=64-128*t;angle=t<.27?-12*(1-smooth(t/.27)):t>.7?29*smooth((t-.7)/.3):0;
+  const r=rad(angle);y=FLOOR-Math.max(-20*Math.sin(r)+15*Math.cos(r),39*Math.sin(r)+15*Math.cos(r));
+ }else{const t=(p-.38)/.62;x=cubic(-64,-134,134,64,t);angle=t<.2?29+16*smooth(t/.2):45-57*smooth((t-.2)/.8);
+  const r=rad(angle);y=FLOOR-Math.max(-20*Math.sin(r)+15*Math.cos(r),39*Math.sin(r)+15*Math.cos(r))-89*Math.sin(Math.PI*t)**1.15;
+ }
+ return {x:X+x,y,angle,stance};
+}
+function leg(prefix,hip,target){
+ const upper=86,lower=87,dx=target.x-hip.x,dy=target.y-hip.y;
+ const distance=Math.max(.001,Math.min(upper+lower-.01,Math.hypot(dx,dy)));
+ const bearing=Math.atan2(dy,dx),along=(upper*upper-lower*lower+distance*distance)/(2*distance),height=Math.sqrt(Math.max(0,upper*upper-along*along));
+ const knee={x:hip.x+Math.cos(bearing)*along+Math.sin(bearing)*height,y:hip.y+Math.sin(bearing)*along-Math.cos(bearing)*height};
+ bone(prefix+'-thigh',hip,knee);bone(prefix+'-shin',knee,target);translate(prefix+'-foot',target.x,target.y,target.angle);
+ return {hip,knee,foot:target};
+}
+function render(seconds){
+ state.time=Number.isFinite(seconds)?Math.max(0,seconds):0;
+ const p=(state.time%CYCLE)/CYCLE,a=p*TAU;
+ state.phase=p;
+ const bob=8*Math.sin(a*2), hip={x:X,y:386+bob};
+ const lean=9+1.8*Math.sin(a*2-.6), tilt=rad(lean);
+ const world=(x,y)=>{const v=rotate(x,y,tilt);return {x:hip.x+v.x,y:hip.y+v.y}};
+ const near=foot(p),far=foot((p+.5)%1);
+ const farLeg=leg('far',{x:hip.x-9,y:hip.y+2},far);
+ translate('jacket-tails',hip.x,hip.y,lean);
+ const lag=Math.sin(a*2-1.1)*5;
+ el('back-tail').setAttribute('d',`M-29-43L-15-28-9 8-28 23Q${-44-lag} 18 ${-58-lag} 25L-43-4Z`);
+ el('front-tail').setAttribute('d',`M7-33L25-24 29 17 10 29-2 10Z`);
+ const nearLeg=leg('near',{x:hip.x+7,y:hip.y},near);
+ translate('torso',hip.x,hip.y,lean);
+ const neck=world(3,-109);
+ translate('head',neck.x,neck.y-bob*.5,-lean*.45+Math.sin(a*2-.3)*.8);
+ const hair=Math.sin(a*2-1.4)*3;
+ el('hair-back').setAttribute('d',`M-26-65Q-47-50-36-22L${-45-hair} -7-25-12 ${-31-hair} 5-8-4 12-28 2-72Z`);
+ const tie=Math.sin(a*2-1)*2.5;
+ el('tie').setAttribute('d',`M-2-86L4-85 ${12+tie}-52 ${7+tie}-41 ${tie}-50Z`);
+ const backShoulder=world(-26,-93),backSwing=.68*Math.cos(a);
+ const backElbow={x:backShoulder.x+Math.sin(backSwing)*54,y:backShoulder.y+Math.cos(backSwing)*54};
+ const backWrist={x:backElbow.x+Math.sin(backSwing+1.18)*47,y:backElbow.y+Math.cos(backSwing+1.18)*47};
+ bone('far-arm-upper',backShoulder,backElbow);bone('far-arm-lower',backElbow,backWrist);
+ const shoulder=world(28,-93),swing=-.34*Math.cos(a);
+ const elbow={x:shoulder.x+Math.sin(swing)*50,y:shoulder.y+Math.cos(swing)*50};
+ const wrist={x:elbow.x+40,y:elbow.y+22+Math.sin(a-.5)*3};
+ bone('near-arm-upper',shoulder,elbow);bone('near-arm-lower',elbow,wrist);translate('armed-hand',wrist.x,wrist.y,38+3*Math.sin(a-.4));
+ el('orientation').setAttribute('transform',`translate(${X} 0) scale(${state.facing} 1) translate(${-X} 0)`);
+ for(const [name,target] of [['near',near],['far',far]]){el('contact-'+name).setAttribute('cx',fmt(X+(target.x-X)*state.facing+9*state.facing));el('contact-'+name).setAttribute('opacity',target.stance?'.19':'0')}
+ el('floor-shadow').setAttribute('rx',fmt(80+bob*.7));el('floor-shadow').setAttribute('opacity',fmt(.13+bob*.002));
+ el('ground-track').setAttribute('stroke-dashoffset',fmt(p*336*state.facing));
+ el('scrub').value=String(Math.round(p*1000));
+ window.__MIDNIGHT__.metrics={near:nearLeg,far:farLeg,hip,wrist,lean};
+}
+function sync(){el('play').textContent=state.paused?'Play':'Pause';el('play').setAttribute('aria-pressed',String(!state.paused));el('speed').value=String(state.speed);el('direction').textContent=state.facing===1?'Face left':'Face right';}
+function pause(){state.paused=true;sync()}
+function play(){state.paused=false;sync()}
+function setSpeed(value){if(Number.isFinite(value)&&value>0&&value<=4)state.speed=value;sync()}
+function setFacing(value){state.facing=value<0?-1:1;render(state.time);sync()}
+window.__MIDNIGHT__={render,pause,play,setSpeed,setFacing,getState:()=>({...state,duration:CYCLE}),metrics:null};
+el('play').onclick=()=>state.paused?play():pause();el('speed').onchange=e=>setSpeed(Number(e.target.value));el('direction').onclick=()=>setFacing(-state.facing);el('scrub').oninput=e=>{pause();render(Number(e.target.value)/1000*CYCLE)};
+document.addEventListener('keydown',event=>{if(event.code==='Space'&&!event.repeat&&!['INPUT','SELECT','BUTTON'].includes(document.activeElement.tagName)){event.preventDefault();state.paused?play():pause()}});
+let previous=performance.now();function frame(now){const dt=Math.min(.1,(now-previous)/1000);previous=now;if(!state.paused)render(state.time+dt*state.speed);requestAnimationFrame(frame)}
+render(0);sync();requestAnimationFrame(frame);
+})();
+</script>
+</body></html>
