@@ -1,27 +1,46 @@
-# Shared-rig 3D prototype
+# Shared animation: three body templates
 
-Mr. Midnight (left) and Brick Barrage (right) use different character meshes with one shared humanoid skeleton definition and one run animation. This is an isolated pipeline test; these models are not integrated into the game.
+Three compatible humanoid rig templates reuse one run animation. From left to right:
 
-![Two character models using the same run animation](shared-rig-run.gif)
+| Template | Test character | Body and costume |
+|---|---|---|
+| Small female | **Katnip Neverdo** | Compact woodland archer with wider hips and narrower shoulders than the two male templates; dark braid, olive jacket, bow, and quiver. An original Katniss-inspired parody. |
+| Medium male | **Mr. Midnight** | Average build, dark suit, long hair, and beard. |
+| Large muscular male | **Brick Barrage** | Taller, broader shoulders and arms, tactical trousers, and bandolier. |
+
+This is an isolated animation and proportion test; these models are not integrated into the game.
+
+![Small, medium, and large characters using the same run animation](shared-rig-run.gif)
 
 - [60 fps video](shared-rig-run.mp4) — six repetitions of the 0.8-second cycle. Download the raw file if GitHub does not play it inline.
 - [Side-view GIF](shared-rig-run-side.gif) — inspect the alternating legs and footfalls.
 - [Still image](shared-rig-run.png).
+- [Front comparison](shared-rig-front.png) — compare shoulder width, height, and silhouette at the same camera scale.
 - [Interactive 3D viewer](viewer.html) — orbit the models, switch front/side views, pause, scrub, change speed, and display the skeletons. GitHub shows the HTML source; run it locally using the instructions below.
 - [Animated GLB](shared-rig.glb) — import into Blender or another glTF-compatible tool.
 - [Editable Blender scene](../../../art/characters/shared-rig/shared-rig.blend).
 
 ## What this verifies
 
-The Blender scene contains two instances of the **same 62-bone Armature data** and the **same Run Action**. The models have distinct meshes, proportions, clothing, materials, and accessories. Their bone poses match at corresponding timestamps. Each character instance gets its own bone nodes in GLB, as required to place two characters independently, while using the same compatible skeleton structure and one combined animation clip.
+The Blender scene contains **three compatible 62-bone armatures** and the **same Run Action**. Each template has its own rest proportions, while bone names, hierarchy, and local axes remain compatible. Upper-body joint offsets and bone lengths change with the template; mesh vertices and weighted accessories are rebased to match. The whole-character scales are 0.89, 1.00, and 1.08 before the additional proportion changes. The viewer preserves those relative sizes.
 
-Independent checks confirm normalized skin weights, fixed bone lengths, alternating foot motion, and exact equality of all bone transforms at the loop boundary. The GLB contains one 0.8-second `Run` clip controlling both characters. Video frames are sampled directly from the rigged 3D scene at 60 fps; the GIF uses separate evenly spaced samples at 50 fps.
+These rigs share local animation transforms rather than identical final joint positions. The GLB contains one 0.8-second `Run` clip controlling all three independently placed characters, with a separate skin and bind matrices for each. Video frames are sampled directly from the rigged 3D scene at 60 fps; the GIF uses separate evenly spaced samples at 50 fps.
+
+The build checks each rig for fixed bone lengths and exact loop closure, and compares local animation transforms across templates. Independent validation also checks skin weights, alternating foot motion, and model/foot bounds.
 
 The original authored run approached its starting pose without including a duplicate closing pose. The build preserves every authored key value, appends that closing pose one source-frame interval later, and uniformly retimes the completed cycle to 0.8 seconds. The source GLBs remain unchanged. See [metadata.json](metadata.json) and [the editable asset's verification report](../../../art/characters/shared-rig/verification.json).
 
 ## Art status
 
-These are **adapted prototype models**, based on Quaternius's CC0 modular characters. They demonstrate the shared-rig approach rather than final likeness to the illustrated character sheet. Mr. Midnight combines the suit with a customized head, hair, and beard. Brick has broader arms/chest, tactical trousers and boots, and a bandolier. More refined character meshes can use the same compatible rig later.
+These are **adapted prototype models**, based on Quaternius's CC0 modular characters. They demonstrate the shared animation workflow before final character modeling. Kat uses a female source mesh normalized to the compatible rig, with archer costume details. Midnight combines the suit with customized hair and beard. Brick has broader arms/chest, tactical trousers and boots, and a bandolier.
+
+New characters can use one of the three templates, replacing meshes, materials, hair, and accessories while preserving its binding conventions. The female source has a different native rest pose; the build converts its meshes to the common rest coordinates before applying the small profile. Its native animation is not mixed into the shared run.
+
+## Animation and proportion limits
+
+Only the **run cycle** is reviewed in this prototype. The rest of the gameplay animation set still needs implementation and review across all three templates: idle/walk/sprint, crouch/roll/drop-through, jump/fall/land, attacks and weapon handling, reactions, and defeat. Final character art should follow those motion checks.
+
+The source rig animates feet as independent children of the root. This pass preserves leg-length ratios and scales leg lengths, stride, and foot translation together. Katnip's wider hip spacing also moves the corresponding leg and foot origins laterally, with ankle alignment checked through the run. Independent leg-to-torso length changes require retargeting the foot tracks and checking floor contact. Weapon grips, reach, and costume collisions also need checks when the corresponding clips are added.
 
 [Asset provenance, licenses, and source hashes](../../../art/characters/shared-rig/SOURCES.md). Three.js is included locally under its [MIT license](THREE-LICENSE.txt); the viewer makes no CDN requests.
 
@@ -54,4 +73,4 @@ node scripts/render-shared-rig-preview.mjs
 
 The capture script starts its own local HTTP server and verifies the model and exported media. Set `CHROMIUM_PATH` if Chromium is not at `/usr/bin/chromium`.
 
-The model adaptation logic is in `scripts/shared-rig-style.py`. The viewer source is `scripts/shared-rig-viewer.mjs`; its header documents rebuilding the local Three.js bundle without changing game dependencies.
+The template definitions and mesh rebasing are in `scripts/shared-rig-proportions.py`. Source normalization is in `scripts/normalize-shared-rig-source.py`; costume and appearance logic is in `scripts/shared-rig-style.py` and `scripts/shared-rig-kat.py`. The viewer source is `scripts/shared-rig-viewer.mjs`; its header documents rebuilding the local Three.js bundle without changing game dependencies.

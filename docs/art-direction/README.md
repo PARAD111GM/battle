@@ -2,10 +2,11 @@
 
 ## Shared-rig 3D prototype
 
-Mr. Midnight and Brick now have a working comparison prototype: two distinct character meshes use the same humanoid skeleton and one run animation. The models are adapted prototype art; this establishes the rig and rendering workflow before final character modeling.
+Three body templates now share one run animation: **small female (Katnip Neverdo), medium male (Mr. Midnight), and large muscular male (Brick Barrage)**. Their compatible skeletons have distinct proportions and matching bone names/hierarchy. The models are adapted prototype art; this establishes the animation and proportion workflow before final character modeling.
 
 - [Watch the 3D run comparison](shared-rig/shared-rig-run.gif).
 - [60 fps video](shared-rig/shared-rig-run.mp4) and [side-view GIF](shared-rig/shared-rig-run-side.gif).
+- [Front comparison](shared-rig/shared-rig-front.png) for body proportions and silhouettes.
 - [Interactive viewer, editable models, source credits, and rebuild instructions](shared-rig/README.md).
 
 ## Mr. Midnight — second animation test

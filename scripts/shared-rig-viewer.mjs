@@ -35,7 +35,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.domElement.setAttribute('aria-label', 'Mr. Midnight and Brick Barrage, animated with the same run cycle');
+renderer.domElement.setAttribute('aria-label', 'Small female, medium male and large muscular male, animated with a shared run cycle');
 renderer.domElement.setAttribute('role', 'img');
 stage.prepend(renderer.domElement);
 
@@ -71,13 +71,43 @@ let model, mixer;
 const actions = [];
 const rigHelpers = [];
 const layoutRoots = [];
-let comparisonSpacing = 2.5;
+const profiles = [
+  { name: 'SmallRig', label: 'Small', character: 'Katnip Neverdo', description: 'Female' },
+  { name: 'MidnightRig', label: 'Medium', character: 'Mr. Midnight', description: 'Average male' },
+  { name: 'BrickRig', label: 'Large', character: 'Brick Barrage', description: 'Muscular male' },
+];
 const size = new THREE.Vector3(4, 2, 2);
 const center = new THREE.Vector3();
 const target = new THREE.Vector3();
 let modelHeight = 2;
 // GLTF uses Y up. The generated Blender models face +Z after GLTF export.
 let frontDirection = new THREE.Vector3(0, 0, 1);
+
+function boxCorners(box) {
+  return [box.min.x, box.max.x].flatMap((x) =>
+    [box.min.y, box.max.y].flatMap((y) =>
+      [box.min.z, box.max.z].map((z) => new THREE.Vector3(x, y, z))));
+}
+
+function measureAnimationBounds() {
+  // Measure real deformed vertices across the run, once on load. Cached mesh
+  // bounds describe a single pose and can clip a swinging hand or raised foot.
+  layoutRoots.forEach((entry) => { entry.motionBounds = new THREE.Box3(); });
+  for (let frame = 0; frame < 48; frame++) {
+    mixer.setTime(frame / 48 * state.duration);
+    model.updateMatrixWorld(true);
+    layoutRoots.forEach((entry) => entry.motionBounds.union(new THREE.Box3().setFromObject(entry.root, true)));
+  }
+  const bounds = new THREE.Box3();
+  layoutRoots.forEach((entry) => bounds.union(entry.motionBounds));
+  bounds.getSize(size);
+  bounds.getCenter(center);
+  modelHeight = size.y;
+  floor.position.y = bounds.min.y - modelHeight * 0.002;
+  target.set(center.x, bounds.min.y + modelHeight * 0.52, center.z);
+  mixer.setTime(0);
+  model.updateMatrixWorld(true);
+}
 
 function resize() {
   const { width, height } = stage.getBoundingClientRect();
@@ -97,23 +127,39 @@ function setCamera(view = 'three-quarter') {
     : isFront ? frontDirection.clone().add(new THREE.Vector3(0, 0.04, 0))
     : frontDirection.clone().multiplyScalar(1.0).add(new THREE.Vector3(-0.667, 0.178, 0));
   direction.normalize();
-  // Turn the inspection camera and keep both complete characters abreast.
+  // Turn the inspection camera and keep all three complete profiles abreast.
   // Only wrappers move; imported skeletons and animation tracks stay untouched.
-  if (layoutRoots.length === 2) {
-    const horizontal = new THREE.Vector3(direction.z, 0, -direction.x).normalize();
-    layoutRoots.forEach(({ wrapper, origin }, index) => {
-      const offset = (index - 0.5) * comparisonSpacing * (camera.aspect < 1.1 ? 0.65 : 0.85);
+  const horizontal = new THREE.Vector3(direction.z, 0, -direction.x).normalize();
+  const vertical = new THREE.Vector3().crossVectors(direction, horizontal).normalize();
+  const allCorners = [];
+  if (layoutRoots.length === profiles.length) {
+    const intervals = layoutRoots.map(({ motionBounds, origin }) => {
+      const projected = boxCorners(motionBounds).map((corner) => corner.sub(origin).dot(horizontal));
+      return { min: Math.min(...projected), max: Math.max(...projected) };
+    });
+    const gap = modelHeight * 0.15;
+    const totalWidth = intervals.reduce((sum, interval) => sum + interval.max - interval.min, 0) + gap * (layoutRoots.length - 1);
+    let nextLeft = -totalWidth / 2;
+    layoutRoots.forEach(({ wrapper, origin, motionBounds }, index) => {
+      const interval = intervals[index];
+      const offset = nextLeft - interval.min;
+      nextLeft += interval.max - interval.min + gap;
       wrapper.position.x = center.x + horizontal.x * offset - origin.x;
       wrapper.position.z = center.z + horizontal.z * offset - origin.z;
+      allCorners.push(...boxCorners(motionBounds).map((corner) => corner.add(wrapper.position)));
     });
     model.updateMatrixWorld(true);
-    new THREE.Box3().setFromObject(model).getSize(size);
   }
   const verticalFov = THREE.MathUtils.degToRad(camera.fov);
   const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
-  const span = isSide ? size.z : Math.max(size.x, size.z);
-  const distance = Math.max(modelHeight / (2 * Math.tan(verticalFov / 2)),
-    span / (2 * Math.tan(horizontalFov / 2))) * 1.45;
+  // Fit every corner in camera space, including perspective depth. A common
+  // camera preserves the authored height/width differences between profiles.
+  const distance = Math.max(modelHeight, ...allCorners.map((corner) => {
+    const relative = corner.sub(target);
+    const depth = relative.dot(direction);
+    return Math.max(Math.abs(relative.dot(horizontal)) / Math.tan(horizontalFov / 2) + depth,
+      Math.abs(relative.dot(vertical)) / Math.tan(verticalFov / 2) + depth);
+  })) * 1.12;
   camera.position.copy(target).addScaledVector(direction, distance);
   camera.near = Math.max(0.001, modelHeight / 1000);
   camera.far = Math.max(100, distance * 20);
@@ -177,7 +223,15 @@ window.addEventListener('keydown', (event) => {
 setPaused(state.paused);
 
 window.__SHARED_RIG_VIEWER__ = {
-  getState: () => ({ ...state, animationCount: actions.length, skeletonCount: rigHelpers.length }),
+  getState: () => ({ ...state, animationCount: actions.length, skeletonCount: rigHelpers.length,
+    profiles: layoutRoots.map(({ label, character, description, root, motionBounds }) => ({ label, character, description,
+      root: root.name, scale: root.scale.toArray(), motionSize: motionBounds?.getSize(new THREE.Vector3()).toArray() })) }),
+  inspectLayout: () => layoutRoots.map(({ label, root }) => {
+    const bounds = new THREE.Box3().setFromObject(root, true);
+    const projected = boxCorners(bounds).map((corner) => corner.project(camera));
+    return { label, min: ['x', 'y'].map((axis) => Math.min(...projected.map((point) => point[axis]))),
+      max: ['x', 'y'].map((axis) => Math.max(...projected.map((point) => point[axis]))) };
+  }),
   pause: () => setPaused(true), play: () => setPaused(false), setSpeed, setBones,
   seek: (seconds) => { seek(seconds); render(); },
   setCamera: (view) => { setCamera(view); render(); },
@@ -187,18 +241,17 @@ window.__SHARED_RIG_VIEWER__ = {
 new GLTFLoader().load(new URL('./shared-rig.glb', import.meta.url).href, (gltf) => {
   model = gltf.scene;
   scene.add(model);
-  const characterNodes = ['MidnightRig', 'BrickRig'].map((name) => model.getObjectByName(name));
-  if (characterNodes.every(Boolean)) {
-    comparisonSpacing = Math.max(2.5, characterNodes[0].position.distanceTo(characterNodes[1].position));
-    characterNodes.forEach((root) => {
+  const characterNodes = profiles.map(({ name }) => model.getObjectByName(name));
+  if (!characterNodes.every(Boolean)) throw new Error('The model must contain SmallRig, MidnightRig and BrickRig.');
+  model.updateMatrixWorld(true);
+  characterNodes.forEach((root, index) => {
       const wrapper = new THREE.Group();
       wrapper.name = `${root.name}_ViewerLayout`;
-      const origin = root.position.clone();
+      const origin = root.getWorldPosition(new THREE.Vector3());
       root.parent.add(wrapper);
       wrapper.add(root);
-      layoutRoots.push({ wrapper, origin });
+      layoutRoots.push({ ...profiles[index], root, wrapper, origin });
     });
-  }
   const meshes = [];
   model.traverse((object) => {
     if (!object.isMesh) return;
@@ -253,10 +306,11 @@ new GLTFLoader().load(new URL('./shared-rig.glb', import.meta.url).href, (gltf) 
     actions.push(mixer.clipAction(clip).play());
   });
   state.duration = Math.max(...actions.map((action) => action.getClip().duration));
+  measureAnimationBounds();
   state.ready = true;
   state.error = null;
   ui.status.textContent = '';
-  ui.details.textContent = `One run cycle · ${state.duration.toFixed(2)} s · Two character builds`;
+  ui.details.textContent = `Shared run cycle · ${state.duration.toFixed(2)} s · Three body profiles`;
   [ui.play, ui.speed, ui.bones, ui.side, ui.front, ui.reset, ui.timeline].forEach((control) => { control.disabled = false; });
   seek(0);
   setCamera();

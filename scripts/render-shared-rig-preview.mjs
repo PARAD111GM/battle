@@ -13,6 +13,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = join(root, 'docs/art-direction/shared-rig');
 const framesDirectory = '/tmp/rivetfall-shared-rig-frames';
 const duration = .8, fps = 60, frameCount = 48, gifFps = 50, gifFrames = 40, repeats = 6;
+const width = 1200, height = 640;
 const framePath = (kind, index) => join(framesDirectory, `${kind}-${String(index).padStart(3, '0')}.png`);
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const run = (program, args) => execFileSync(program, args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
@@ -24,7 +25,7 @@ await mkdir(framesDirectory, { recursive: true });
 for (const name of await readdir(framesDirectory)) if (/^(?:video|gif|side)-\d{3}\.png$/.test(name)) await unlink(join(framesDirectory, name));
 
 // Inspect the source GLB as well as its rendered output: it must contain one
-// animation shared by two skinned characters, with a real closed bone cycle.
+// animation shared by three skinned characters, with a real closed bone cycle.
 const glbBytes = await readFile(join(output, 'shared-rig.glb'));
 assert.equal(glbBytes.readUInt32LE(0), 0x46546c67, 'Expected a binary glTF model');
 let gltf, binary;
@@ -37,7 +38,8 @@ for (let offset = 12; offset < glbBytes.length;) {
 }
 assert.ok(gltf && binary);
 assert.equal(gltf.animations.length, 1, 'There must be exactly one shared animation clip');
-assert.equal(gltf.skins.length, 2, 'Both character models must be skinned');
+assert.equal(gltf.skins.length, 3, 'All three body profiles must be skinned');
+for (const name of ['SmallRig', 'MidnightRig', 'BrickRig']) assert.ok(gltf.nodes.some(node => node.name === name), `Missing body profile ${name}`);
 const sizes = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
 const accessorData = index => {
   const accessor = gltf.accessors[index], view = gltf.bufferViews[accessor.bufferView];
@@ -87,28 +89,39 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const target = process.env.SHARED_RIG_URL || `http://127.0.0.1:${server.address().port}/docs/art-direction/shared-rig/viewer.html`;
 const errors = [], frameHashes = new Set(), gifHashes = new Set(), sideHashes = new Set();
 let browser, closureRaster, viewerState;
+const layoutChecks = [];
 try {
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true,
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '--disable-dev-shm-usage'] });
-  const page = await browser.newPage({ viewport: { width: 1040, height: 900 }, deviceScaleFactor: 1, reducedMotion: 'reduce' });
+  const page = await browser.newPage({ viewport: { width: width + 80, height: 900 }, deviceScaleFactor: 1, reducedMotion: 'reduce' });
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   await page.goto(target);
   await page.waitForFunction(() => window.__SHARED_RIG_VIEWER__?.getState().ready, undefined, { timeout: 60000 });
-  await page.evaluate(() => {
+  await page.evaluate(({ width, height }) => {
     const api = window.__SHARED_RIG_VIEWER__;
     for (const method of ['pause', 'play', 'seek', 'setSpeed', 'setCamera', 'setBones', 'getState']) if (typeof api[method] !== 'function') throw new Error(`Missing viewer API ${method}`);
     api.pause(); api.setSpeed(1); api.setBones(false); api.seek(0);
     document.getElementById('view-label').style.display = 'none';
-    Object.assign(document.getElementById('stage').style, { width: '960px', height: '640px', minHeight: '0', border: '0', borderRadius: '0' });
-  });
+    Object.assign(document.getElementById('stage').style, { width: `${width}px`, height: `${height}px`, minHeight: '0', border: '0', borderRadius: '0' });
+  }, { width, height });
   await page.waitForTimeout(100);
   const canvas = page.locator('#stage canvas');
   const bounds = await canvas.boundingBox();
-  assert.ok(bounds && bounds.width === 960 && bounds.height === 640, 'Canvas export size must be exactly 960×640');
+  assert.ok(bounds && bounds.width === width && bounds.height === height, `Canvas export size must be exactly ${width}×${height}`);
   const state = () => page.evaluate(() => window.__SHARED_RIG_VIEWER__.getState());
   const seek = time => page.evaluate(time => window.__SHARED_RIG_VIEWER__.seek(time), time);
   const camera = view => page.evaluate(view => { window.__SHARED_RIG_VIEWER__.seek(0); window.__SHARED_RIG_VIEWER__.setCamera(view); }, view);
+  const checkLayout = async view => {
+    for (const time of [0, .2, .4, .6]) {
+      await seek(time);
+      const profiles = await page.evaluate(() => window.__SHARED_RIG_VIEWER__.inspectLayout());
+      assert.deepEqual(profiles.map(profile => profile.label), ['Small', 'Medium', 'Large']);
+      profiles.forEach(profile => assert.ok(profile.min.every(value => value > -1) && profile.max.every(value => value < 1), `${view} ${profile.label} must stay fully in view at ${time}`));
+      for (let index = 1; index < profiles.length; index++) assert.ok(profiles[index - 1].max[0] < profiles[index].min[0], `${view} profiles must stay ordered with no silhouette overlap`);
+      layoutChecks.push({ view, time, profiles });
+    }
+  };
   const capture = async (kind, index, time, hashes) => {
     await seek(time);
     const png = await canvas.screenshot({ path: framePath(kind, index), animations: 'disabled' });
@@ -117,7 +130,9 @@ try {
   };
   viewerState = await state();
   assert.equal(viewerState.ready, true); assert.equal(viewerState.paused, true); assert.equal(viewerState.error, null);
-  assert.equal(viewerState.animationCount, 1); assert.equal(viewerState.skeletonCount, 2);
+  assert.equal(viewerState.animationCount, 1); assert.equal(viewerState.skeletonCount, 3);
+  assert.deepEqual(viewerState.profiles.map(profile => profile.label), ['Small', 'Medium', 'Large']);
+  assert.ok(viewerState.profiles[0].motionSize[1] < viewerState.profiles[1].motionSize[1] && viewerState.profiles[1].motionSize[1] < viewerState.profiles[2].motionSize[1], 'Authored body heights must remain small < medium < large');
   assert.ok(Math.abs(viewerState.duration - duration) < 1e-6);
   await page.waitForTimeout(120); assert.equal((await state()).time, viewerState.time, 'Pause must freeze playback time');
   await page.locator('#speed').selectOption('0.5'); assert.equal((await state()).speed, .5);
@@ -135,6 +150,7 @@ try {
   assert.notEqual((await state()).time, duration / 4, 'Play must advance the animation');
 
   await camera('three-quarter');
+  await checkLayout('three-quarter');
   for (let frame = 0; frame < frameCount; frame++) {
     await capture('video', frame, frame / fps, frameHashes);
     if (frame % 12 === 0) console.log(JSON.stringify({ phase: 'video', frame, path: framePath('video', frame) }));
@@ -162,11 +178,27 @@ try {
   }
   assert.equal(gifHashes.size, gifFrames, 'Each directly sampled GIF frame must be distinct');
   await camera('side');
+  await checkLayout('side');
   for (let frame = 0; frame < gifFrames; frame++) {
     await capture('side', frame, frame / gifFps, sideHashes);
     if (frame % 10 === 0) console.log(JSON.stringify({ phase: 'side', frame }));
   }
   assert.equal(sideHashes.size, gifFrames, 'Each side view GIF frame must be distinct');
+  await camera('front');
+  await checkLayout('front');
+  await seek(.2);
+  await canvas.screenshot({ path: join(output, 'shared-rig-front.png'), animations: 'disabled' });
+  await page.evaluate(() => {
+    document.getElementById('stage').removeAttribute('style');
+    document.getElementById('view-label').style.display = '';
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(100);
+  for (const view of ['three-quarter', 'side', 'front']) {
+    await camera(view);
+    await checkLayout(`mobile-${view}`);
+  }
+  await page.screenshot({ path: join(framesDirectory, 'mobile-viewer.png'), fullPage: true });
   assert.deepEqual(errors, [], 'The preview must emit no page or console errors');
 } finally {
   if (browser) await browser.close();
@@ -184,7 +216,7 @@ run('ffmpeg', ['-y', '-v', 'error', '-framerate', String(fps), '-i', join(frames
 const media = {};
 for (const [kind, path] of [['gif', gif], ['sideGif', sideGif], ['mp4', mp4]]) {
   const info = probe(path), stream = info.streams[0], isVideo = kind === 'mp4';
-  assert.equal(stream.width, 960); assert.equal(stream.height, 640);
+  assert.equal(stream.width, width); assert.equal(stream.height, height);
   assert.equal(Number(stream.nb_read_frames), isVideo ? frameCount * repeats : gifFrames);
   assert.equal(rate(stream.avg_frame_rate), isVideo ? fps : gifFps);
   assert.ok(Math.abs(Number(info.format.duration) - duration * (isVideo ? repeats : 1)) < .011);
@@ -196,6 +228,6 @@ for (const [kind, path] of [['gif', gif], ['sideGif', sideGif], ['mp4', mp4]]) {
   media[kind] = { path, ...info };
 }
 assert.equal(digest(await readFile(join(output, 'shared-rig.glb'))), modelReport.sha256, 'The source GLB must remain unchanged during capture');
-const report = { duration, sourceFrames: frameCount, sourceFps: fps, gifFrames, gifFps, videoUniqueFrames: frameHashes.size, gifUniqueFrames: gifHashes.size, sideUniqueFrames: sideHashes.size, dimensions: '960x640', model: modelReport, viewerState, closureRaster, errors, media, framesDirectory };
+const report = { duration, sourceFrames: frameCount, sourceFps: fps, gifFrames, gifFps, videoUniqueFrames: frameHashes.size, gifUniqueFrames: gifHashes.size, sideUniqueFrames: sideHashes.size, dimensions: `${width}x${height}`, model: modelReport, viewerState, closureRaster, layoutChecks, errors, media, framesDirectory };
 await writeFile(join(framesDirectory, 'export-report.json'), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));

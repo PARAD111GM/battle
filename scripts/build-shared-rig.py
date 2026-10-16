@@ -6,7 +6,7 @@
 
 The first command builds the editable scene/GLB and review poses. The second
 also renders one exact 0.8-second run cycle as 48 PNG frames at 60 fps.
-All three source GLBs are CC0 Quaternius models; see SOURCES.md beside them.
+All four source GLBs are CC0 Quaternius models; see SOURCES.md beside them.
 """
 import argparse
 import hashlib
@@ -28,7 +28,7 @@ DOCS = ROOT / 'docs/art-direction/shared-rig'
 FPS = 60
 DURATION = 0.8
 FRAME_COUNT = 48
-SOURCE_NAMES = ('suit', 'casual', 'swat')
+SOURCE_NAMES = ('suit', 'casual', 'swat', 'female')
 
 
 def arguments():
@@ -60,6 +60,50 @@ def action_signature(action):
                       for k in f.keyframe_points],
              'modifiers': [m.type for m in f.modifiers]}
             for f in action.fcurves]
+
+
+def load_module(name, filename):
+    spec = importlib.util.spec_from_file_location(name, ROOT / 'scripts' / filename)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def hierarchy(rig):
+    return [(b.name, b.parent.name if b.parent else None) for b in rig.data.bones]
+
+
+def matrix_difference(first, second):
+    return max(abs(a - b) for ra, rb in zip(first, second) for a, b in zip(ra, rb))
+
+
+def verify_variants(rigs, action):
+    """Compatible rigs share local animation, not identical posed joint positions."""
+    reference = rigs['midnight']
+    assert len(reference.data.bones) == 62
+    first, reports = {}, {}
+    at_frame(0)
+    for name, rig in rigs.items():
+        assert hierarchy(rig) == hierarchy(reference)
+        assert rig.animation_data.action is action
+        first[name] = {b.name: b.matrix.copy() for b in rig.pose.bones}
+        reports[name] = {'loop_max_matrix_error': 0, 'max_bone_length_drift': 0,
+                         'max_local_animation_matrix_error': 0}
+    for frame in range(FRAME_COUNT + 1):
+        at_frame(frame)
+        for name, rig in rigs.items():
+            report = reports[name]
+            for bone in rig.pose.bones:
+                report['max_bone_length_drift'] = max(report['max_bone_length_drift'],
+                    abs((bone.tail - bone.head).length - rig.data.bones[bone.name].length))
+                report['max_local_animation_matrix_error'] = max(report['max_local_animation_matrix_error'],
+                    matrix_difference(bone.matrix_basis, reference.pose.bones[bone.name].matrix_basis))
+                if frame == FRAME_COUNT:
+                    report['loop_max_matrix_error'] = max(report['loop_max_matrix_error'],
+                        matrix_difference(first[name][bone.name], bone.matrix))
+    for name, report in reports.items():
+        assert max(report.values()) < 1e-5, (name, report)
+    return reports
 
 
 
@@ -131,8 +175,11 @@ def assemble(sources):
         actual = skeleton_signature(source['rig'])
         assert [b['name'] for b in actual] == [b['name'] for b in reference], name
         assert [b['parent'] for b in actual] == [b['parent'] for b in reference], name
-        error = max(abs(x - y) for a, b in zip(actual, reference) for x, y in zip(a['matrix'], b['matrix']))
-        assert error < 1e-6, f'{name} rest skeleton differs by {error}'
+        if name != 'female':
+            error = max(abs(x - y) for a, b in zip(actual, reference) for x, y in zip(a['matrix'], b['matrix']))
+            assert error < 1e-6, f'{name} rest skeleton differs by {error}'
+    normalizer = load_module('normalize_shared_rig_source', 'normalize-shared-rig-source.py')
+    normalization = normalizer.normalize_source(sources['female'], master)
     action = next(a for a in sources['suit']['actions'] if a.name.startswith('Run_CharacterArmature'))
     raw_signature = digest(action_signature(action))
     assert abs(float(action.frame_range[1]) / FPS - DURATION) < 1e-6
@@ -146,8 +193,13 @@ def assemble(sources):
     brick_rig.data = master.data
     brick_rig.name = 'BrickRig'
     bpy.context.collection.objects.link(brick_rig)
-    rigs = {'midnight': master, 'brick': brick_rig}
+    small_rig = master.copy()
+    small_rig.data = master.data
+    small_rig.name = 'SmallRig'
+    bpy.context.collection.objects.link(small_rig)
+    rigs = {'small': small_rig, 'midnight': master, 'brick': brick_rig}
     parts = {
+        'small': [('female', 'Casual_Body'), ('female', 'Casual_Legs'), ('female', 'Casual_Feet'), ('female', 'Casual_Head')],
         'midnight': [('suit', 'Suit_Body'), ('suit', 'Suit_Legs'), ('suit', 'Suit_Feet'), ('casual', 'Casual2_Head')],
         'brick': [('casual', 'Casual2_Body'), ('suit', 'Suit_Head'), ('swat', 'Swat_Legs'), ('swat', 'Swat_Feet')],
     }
@@ -178,11 +230,11 @@ def assemble(sources):
     # Styling happens in the common rest coordinate system. It changes meshes,
     # materials, and attachments; it must not change the skeleton or animation.
     bpy.context.scene.frame_set(0)
-    spec = importlib.util.spec_from_file_location('shared_rig_style', ROOT / 'scripts/shared-rig-style.py')
-    style = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(style)
+    style = load_module('shared_rig_style', 'shared-rig-style.py')
+    kat_style = load_module('shared_rig_kat', 'shared-rig-kat.py')
     for character, rig in rigs.items():
-        extras = style.style_character(character, rig, chosen[character])
+        character_style = kat_style if character == 'small' else style
+        extras = character_style.style_character(character, rig, chosen[character])
         if extras:
             for extra in extras:
                 if extra.parent is None:
@@ -197,12 +249,16 @@ def assemble(sources):
     assert master.animation_data.action is brick_rig.animation_data.action is action
     assert digest(action_signature(action)) == prepared_signature, 'Styling modified the prepared run'
     assert skeleton_signature(master) == reference, 'Styling modified the shared rest skeleton'
+    proportions = load_module('shared_rig_proportions', 'shared-rig-proportions.py')
+    profiles = {character: proportions.apply_proportions(character, rig, chosen[character])
+                for character, rig in rigs.items()}
+    assert digest(action_signature(action)) == prepared_signature, 'Proportions modified the shared run'
     # Separate on the camera's screen-horizontal axis while keeping equal depth.
     horizontal = Vector((9, -6, 0)).normalized()
-    for character, multiplier in [('midnight', -1), ('brick', 1)]:
-        rigs[character].location += horizontal * (1.13 * multiplier)
+    for character, multiplier in [('small', -1), ('midnight', 0), ('brick', 1)]:
+        rigs[character].location += horizontal * (1.85 * multiplier)
     bpy.context.view_layer.update()
-    return rigs, chosen, action, raw_signature, prepared_signature, loop_fix
+    return rigs, chosen, action, raw_signature, prepared_signature, loop_fix, profiles, normalization
 
 
 def aim(obj, target):
@@ -237,7 +293,7 @@ def setup_studio(options):
     camera = bpy.context.object
     camera.name = 'SharedRigReviewCamera'
     camera.data.type = 'ORTHO'
-    camera.data.ortho_scale = 4.5
+    camera.data.ortho_scale = 6.0
     aim(camera, (0, 0, .94))
     scene.camera = camera
     scene.world = bpy.data.worlds.new('Warm studio world')
@@ -252,7 +308,7 @@ def setup_studio(options):
         scene.cycles.use_denoising = False  # This cloud Blender build has no OIDN.
     else:
         scene.eevee.taa_render_samples = max(1, options.samples)
-    scene.render.resolution_x = 960
+    scene.render.resolution_x = 1200
     scene.render.resolution_y = 640
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = 'PNG'
@@ -325,7 +381,8 @@ def export_glb(rigs, meshes):
         clips.append({'name': animation.get('name'), 'duration': duration,
                       'channels': len(animation['channels'])})
     names = {n.get('name') for n in document['nodes']}
-    assert {'MidnightRig', 'BrickRig'} <= names
+    assert {'SmallRig', 'MidnightRig', 'BrickRig'} <= names
+    assert len(document.get('skins', [])) == 3
     return {'path': str(target.relative_to(ROOT)), 'clips': clips,
             'skins': len(document.get('skins', [])), 'nodes': len(document['nodes'])}
 
@@ -347,26 +404,10 @@ def main():
     # keeps the source's exact .8-second duration as 48 timeline units.
     bpy.context.scene.render.fps = FPS
     sources = {name: import_source(name) for name in SOURCE_NAMES}
-    rigs, meshes, action, raw_signature, prepared_signature, loop_fix = assemble(sources)
+    rigs, meshes, action, raw_signature, prepared_signature, loop_fix, profiles, normalization = assemble(sources)
     camera = setup_studio(options)
-    pose_zero = report_pose(rigs['midnight'], 0)
-    pose_end = report_pose(rigs['midnight'], FRAME_COUNT)
-    closure_error = max(abs(x - y) for name in pose_zero for x, y in zip(pose_zero[name], pose_end[name]))
-    # Compare full matrices as well, including rotations and scale.
-    at_frame(0)
-    first_matrices = {b.name: b.matrix.copy() for b in rigs['midnight'].pose.bones}
-    at_frame(FRAME_COUNT)
-    matrix_error = max(abs(a - b) for bone in rigs['midnight'].pose.bones
-                       for ra, rb in zip(first_matrices[bone.name], bone.matrix) for a, b in zip(ra, rb))
-    assert matrix_error < 1e-5, f'Final run loop endpoint differs by {matrix_error}'
+    variant_checks = verify_variants(rigs, action)
     pose_samples = [report_pose(rigs['midnight'], frame) for frame in [0, 12, 24, 36, 48]]
-    shared_pose_error = 0
-    for frame in range(FRAME_COUNT + 1):
-        at_frame(frame)
-        for bone in rigs['midnight'].pose.bones:
-            other = rigs['brick'].pose.bones[bone.name]
-            shared_pose_error = max(shared_pose_error, *(abs(a - b) for ra, rb in zip(bone.matrix, other.matrix) for a, b in zip(ra, rb)))
-    assert shared_pose_error < 1e-7
     glb = export_glb(rigs, meshes)
     assert digest(action_signature(action)) == prepared_signature, 'Export changed the prepared action'
     at_frame(6)
@@ -375,16 +416,19 @@ def main():
         'fps': FPS, 'duration': DURATION, 'unique_frames': FRAME_COUNT,
         'clip': glb['clips'][0]['name'], 'source_animation': 'Quaternius Run (authored poses preserved; closing pose added and uniformly retimed)',
         'shared_armature_data': rigs['midnight'].data is rigs['brick'].data,
-        'shared_action_data': rigs['midnight'].animation_data.action is rigs['brick'].animation_data.action,
+        'shared_action_data': all(rig.animation_data.action is action for rig in rigs.values()),
         'bone_count': len(rigs['midnight'].data.bones),
-        'skeleton_sha256': digest(skeleton_signature(rigs['midnight'])),
+        'compatible_hierarchy': True,
+        'proportion_profiles': profiles,
+        'female_source_normalization': normalization,
         'source_action_sha256': raw_signature, 'action_sha256': prepared_signature,
         'loop_preparation': loop_fix,
-        'loop_max_translation_error': closure_error, 'loop_max_matrix_error': matrix_error,
-        'same_pose_max_matrix_error': shared_pose_error,
+        'variant_checks': variant_checks,
         'quarter_poses_armature_space': pose_samples,
-        'characters': {key: {'root': rig.name, 'blender_position': list(rig.location),
+        'characters': {key: {'name': rig.get('character'), 'root': rig.name, 'blender_position': list(rig.location),
                             'gltf_position': [rig.location.x, rig.location.z, -rig.location.y],
+                            'object_scale': list(rig.scale),
+                            'skeleton_sha256': digest(skeleton_signature(rig)),
                             'meshes': [{'name': obj.name, 'source_mesh': obj.get('source_mesh'),
                                         'vertices': len(obj.data.vertices), 'faces': len(obj.data.polygons)}
                                        for obj in meshes[key]],
@@ -394,7 +438,7 @@ def main():
                    'gltf_target': [0, .94, 0], 'orthographic_width': camera.data.ortho_scale},
         'axes': {'blender': {'up': '+Z', 'front': '-Y'}, 'gltf': {'up': '+Y', 'front': '+Z'}},
         'export': glb, 'render': {'engine': options.engine, 'samples': options.samples, 'denoising': False,
-                                'width': 960, 'height': 640},
+                                'width': 1200, 'height': 640},
     }
     (DOCS / 'metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
     (ART / 'verification.json').write_text(json.dumps(metadata, indent=2) + '\n')
@@ -413,7 +457,7 @@ def main():
     bpy.ops.wm.save_as_mainfile(filepath=str(ART / 'shared-rig.blend'))
     print('SHARED_RIG_REPORT=' + json.dumps({'metadata': str(DOCS / 'metadata.json'),
           'poster': str(DOCS / 'shared-rig-poster.png'), 'mode': 'render' if options.render else 'preview',
-          'shared_armature': True, 'shared_action': True, 'bones': metadata['bone_count'], 'glb': glb}))
+          'compatible_hierarchy': True, 'shared_action': True, 'bones': metadata['bone_count'], 'glb': glb}))
 
 
 if __name__ == '__main__':
