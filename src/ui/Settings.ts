@@ -26,7 +26,15 @@ export class SettingsPanel {
         ${(['master', 'sfx', 'music'] as const).map(key => `<label class="volume-control"><span>${{ master: 'Master volume', sfx: 'Sound effects', music: 'Music' }[key]}<output data-volume-output="${key}">${Math.round(settings.get().audio[key] * 100)}%</output></span><input type="range" min="0" max="100" step="1" value="${Math.round(settings.get().audio[key] * 100)}" data-volume="${key}" aria-label="${key} volume"></label>`).join('')}
         <div class="settings-divider"></div>
         ${(['screenShake', 'hitstop'] as const).map(key => `<label class="effect-control"><span><strong>${key === 'screenShake' ? 'Screen shake' : 'Impact pause'}</strong><small>${key === 'screenShake' ? 'Camera reacts to heavy hits.' : 'Brief freezes emphasize hard hits.'}</small></span><input type="checkbox" data-effect="${key}" ${settings.get().effects[key] ? 'checked' : ''}></label>`).join('')}
-        <div class="settings-divider"></div>`}<h2>Mouse · Player 1</h2>
+        <div class="settings-divider"></div>`}<h2>Movement gestures</h2>
+        ${([
+          ['sprintDoubleTap', 'Double-tap to sprint', 'Tap left or right twice, then hold that direction for double speed.'],
+          ['rollWithDown', 'Duck + direction to roll', 'Press down while moving left or right to dodge.'],
+          ['dropThroughDoubleTap', 'Double-tap down to drop', 'Drop through a platform or thin catwalk when there is room below.'],
+        ] as const).map(([key, label, hint]) => `<label class="effect-control gesture-control"><span><strong>${label}</strong><small>${hint}</small></span><input type="checkbox" data-gesture="${key}" aria-label="${label}" ${settings.get().gestures[key] ? 'checked' : ''}></label>`).join('')}
+        <label class="volume-control gesture-timing"><span>Double-tap window<output data-double-tap-output>${settings.get().gestures.doubleTapWindowMs} ms</output></span><input type="range" min="100" max="500" step="10" value="${settings.get().gestures.doubleTapWindowMs}" data-double-tap-window aria-label="Double-tap window"></label>
+        <p class="settings-note">Applies to both keyboards and every gamepad. A longer window makes double-taps easier. Optional sprint, roll, and drop-through bindings are available below.</p>
+        <div class="settings-divider"></div><h2>Mouse · Player 1</h2>
         ${(['attack', 'shoot'] as const).map(action => `<label class="mouse-control"><span>${ACTION_LABELS[action]}</span><select data-mouse-bind="${action}" aria-label="Mouse ${action}">${mouseOptions.map((name, index) => `<option value="${index - 1}" ${settings.get().mouse[action] === index - 1 ? 'selected' : ''}>${name}</option>`).join('')}</select></label>`).join('')}
         <p class="settings-note">Mouse movement aims for Player 1. Both keyboard players can aim in eight directions using movement keys.</p>
         <button class="settings-reset" data-pref-reset>${this.controlsOnly ? 'RESET CONTROLS' : 'RESET ALL DEFAULTS'}</button>
@@ -69,15 +77,15 @@ export class SettingsPanel {
       <label class="scheme-field"><span>Scheme name</span><input data-scheme-name aria-label="Control scheme name" maxlength="${CONTROL_SCHEME_NAME_LIMIT}" placeholder="e.g. Couch co-op" value="${escapeHtml(selected?.name ?? '')}" autocomplete="off"></label>
       <div class="scheme-actions"><button data-scheme-action="save" ${schemes.length >= MAX_CONTROL_SCHEMES ? 'disabled' : ''}>SAVE NEW</button><button data-scheme-action="update" ${selected ? '' : 'disabled'}>SAVE CHANGES</button><button data-scheme-action="rename" ${selected ? '' : 'disabled'}>RENAME</button><button data-scheme-action="delete" ${selected ? '' : 'disabled'}>DELETE</button></div>
       <p class="scheme-feedback"></p>
-      <p class="settings-note">Choose a scheme to apply it. Each saves both keyboards, mouse bindings, and gamepad controls. Edit a binding below, then save your changes or give a new scheme its own name. ${schemes.length}/${MAX_CONTROL_SCHEMES} saved.</p>`;
+      <p class="settings-note">Choose a scheme to apply it. Each saves both keyboards, mouse bindings, gamepad controls, and movement gestures. Edit your controls, then save your changes or give a new scheme its own name. ${schemes.length}/${MAX_CONTROL_SCHEMES} saved.</p>`;
     this.renderSchemeState();
   }
   private renderSchemeState(): void {
     const state = this.root.querySelector<HTMLElement>('[data-scheme-state]');
     if (!state) return;
     const selected = controlSchemes.activeId ? controlSchemes.get(controlSchemes.activeId) : undefined;
-    const { keyboard, mouse, gamepad } = settings.get();
-    const modified = Boolean(selected && JSON.stringify(selected.controls) !== JSON.stringify({ keyboard, mouse, gamepad }));
+    const { keyboard, mouse, gamepad, gestures } = settings.get();
+    const modified = Boolean(selected && JSON.stringify(selected.controls) !== JSON.stringify({ keyboard, mouse, gamepad, gestures }));
     state.textContent = selected ? modified ? 'Unsaved changes' : 'Saved scheme' : 'Current custom controls';
     state.dataset.modified = String(modified);
   }
@@ -120,7 +128,7 @@ export class SettingsPanel {
     if (target.dataset.schemeAction) { this.schemeAction(target.dataset.schemeAction); return; }
     if (target.hasAttribute('data-pref-reset')) {
       this.cancelCapture();
-      if (this.controlsOnly) { const { keyboard, mouse, gamepad } = defaultSettings(); settings.update({ keyboard, mouse, gamepad }); }
+      if (this.controlsOnly) { const { keyboard, mouse, gamepad, gestures } = defaultSettings(); settings.update({ keyboard, mouse, gamepad, gestures }); }
       else settings.reset();
       controlSchemes.select(null); this.show(); this.status(this.controlsOnly ? 'Default controls restored. Saved schemes kept.' : 'Default controls, audio and effects restored. Saved schemes kept.'); return;
     }
@@ -150,6 +158,10 @@ export class SettingsPanel {
       settings.update({ gamepad: { deadzone: Number(target.value) / 100 } });
       const output = this.root.querySelector('[data-deadzone-output]'); if (output) output.textContent = `${target.value}%`; this.status();
     }
+    if (target.hasAttribute('data-double-tap-window')) {
+      settings.update({ gestures: { doubleTapWindowMs: Number(target.value) } });
+      const output = this.root.querySelector('[data-double-tap-output]'); if (output) output.textContent = `${settings.get().gestures.doubleTapWindowMs} ms`; this.status();
+    }
   };
   private onChange = (event: Event): void => {
     const target = event.target as HTMLInputElement;
@@ -166,6 +178,7 @@ export class SettingsPanel {
       return;
     }
     if (target.dataset.effect) settings.update({ effects: { [target.dataset.effect]: target.checked } });
+    if (target.dataset.gesture) settings.update({ gestures: { [target.dataset.gesture]: target.checked } });
     if (target.dataset.mouseBind) { const note = settings.bindMouse(target.dataset.mouseBind as 'attack' | 'shoot', Number(target.value)); this.root.querySelectorAll<HTMLSelectElement>('[data-mouse-bind]').forEach(select => select.value = String(settings.get().mouse[select.dataset.mouseBind as 'attack' | 'shoot'])); this.status(note); return; }
     if (target.dataset.padBind) { this.cancelCapture(); const note = settings.bindGamepad(target.dataset.padBind as BindingAction, Number(target.value)); this.renderBindings(); this.status(note); return; }
     if (target.dataset.axis) settings.update({ gamepad: { axes: { [target.dataset.axis]: Number(target.value) } } });

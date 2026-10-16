@@ -7,7 +7,7 @@ export const CONTROL_SCHEME_NAME_LIMIT = 48;
 export interface ControlScheme {
   id: string;
   name: string;
-  controls: Pick<GameSettings, 'keyboard' | 'mouse' | 'gamepad'>;
+  controls: Pick<GameSettings, 'keyboard' | 'mouse' | 'gamepad' | 'gestures'>;
 }
 
 type SchemeStorage = Pick<Storage, 'getItem' | 'setItem'>;
@@ -27,9 +27,9 @@ function schemeName(value: unknown): string {
 /** Reuse the live-settings schema, but never retain presentation preferences or caller objects. */
 function snapshot(value: unknown): ControlScheme['controls'] {
   const source = object(value) ?? {};
-  const { keyboard, mouse, gamepad } = normalizeSettings({ version: 1,
-    keyboard: source.keyboard, mouse: source.mouse, gamepad: source.gamepad });
-  return { keyboard, mouse, gamepad };
+  const { keyboard, mouse, gamepad, gestures } = normalizeSettings({ version: 1,
+    keyboard: source.keyboard, mouse: source.mouse, gamepad: source.gamepad, gestures: source.gestures });
+  return { keyboard, mouse, gamepad, gestures };
 }
 
 /** Named, independent snapshots. Selecting a scheme never changes the active gameplay settings. */

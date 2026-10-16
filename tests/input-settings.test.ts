@@ -23,7 +23,7 @@ describe('validated local control and presentation settings', () => {
       gamepad: { axes: { aimX: 100 }, buttons: { shoot: 99 }, deadzone: 5 }, mouse: { attack: -5 } });
     expect(data.keyboard[0].attack).toBe('KeyJ');
     expect(data.keyboard[0].jump).toBe('KeyV');
-    expect(data.keyboard[0].roll).toBe('ShiftLeft');
+    expect(data.keyboard[0].roll).toBe('');
     expect(data.audio).toEqual({ master: 0, sfx: 0.85, music: 1 });
     expect(data.effects).toEqual({ screenShake: true, hitstop: false });
     expect(data.gamepad.axes.aimX).toBe(2);
@@ -66,7 +66,7 @@ describe('validated local control and presentation settings', () => {
     let notices = 0;
     const unsubscribe = store.subscribe(() => notices++);
     store.bindKeyboard(0, 'jump', 'KeyV'); store.bindKeyboard(1, 'jump', 'KeyB');
-    store.update({ audio: { music: 0 }, effects: { hitstop: false }, gamepad: { axes: { aimX: 4 }, deadzone: 0.35, invertAimY: true } });
+    store.update({ audio: { music: 0 }, effects: { hitstop: false }, gestures: { sprintDoubleTap: false, doubleTapWindowMs: 320 }, gamepad: { axes: { aimX: 4 }, deadzone: 0.35, invertAimY: true } });
     expect(notices).toBe(3);
     unsubscribe(); store.bindMouse('shoot', 1);
     expect(notices).toBe(3);
@@ -84,5 +84,30 @@ describe('validated local control and presentation settings', () => {
     expect(recovered.gamepad.buttons.attack).toBe(2); expect(recovered.gamepad.buttons.shoot).toBe(-1);
     const independent = defaultSettings(); independent.keyboard[0].attack = 'KeyV';
     expect(defaultSettings().keyboard[0].attack).toBe('KeyJ');
+  });
+
+  it('defaults to directional gestures and preserves explicit legacy roll controls during migration', () => {
+    const fresh = defaultSettings();
+    expect(fresh.gestures).toEqual({ sprintDoubleTap: true, dropThroughDoubleTap: true, rollWithDown: true, doubleTapWindowMs: 250 });
+    for (const action of ['roll', 'sprint', 'dropThrough'] as const) {
+      expect(fresh.keyboard[0][action]).toBe(''); expect(fresh.keyboard[1][action]).toBe(''); expect(fresh.gamepad.buttons[action]).toBe(-1);
+    }
+    const migrated = normalizeSettings({ version: 1, keyboard: [{ roll: 'ShiftLeft' }, { roll: 'ShiftRight' }], gamepad: { buttons: { roll: 1 } } });
+    expect(migrated.keyboard[0].roll).toBe('ShiftLeft'); expect(migrated.keyboard[1].roll).toBe('ShiftRight'); expect(migrated.gamepad.buttons.roll).toBe(1);
+    expect(migrated.gestures).toEqual(fresh.gestures);
+  });
+
+  it('validates gesture options, merges independent changes and persists optional sprint/drop bindings', () => {
+    expect(normalizeSettings({ version: 1, gestures: { sprintDoubleTap: 'false', dropThroughDoubleTap: false, rollWithDown: false, doubleTapWindowMs: -2 } }).gestures)
+      .toEqual({ sprintDoubleTap: true, dropThroughDoubleTap: false, rollWithDown: false, doubleTapWindowMs: 100 });
+    expect(normalizeSettings({ version: 1, gestures: { doubleTapWindowMs: Infinity } }).gestures.doubleTapWindowMs).toBe(250);
+    const storage = memoryStorage(), store = new SettingsStore(storage);
+    store.update({ gestures: { sprintDoubleTap: false, doubleTapWindowMs: 900 } });
+    store.update({ gestures: { rollWithDown: false } });
+    expect(store.get().gestures).toEqual({ sprintDoubleTap: false, dropThroughDoubleTap: true, rollWithDown: false, doubleTapWindowMs: 500 });
+    store.bindKeyboard(0, 'sprint', 'ShiftLeft'); store.bindKeyboard(1, 'dropThrough', 'ShiftRight');
+    store.bindGamepad('sprint', 8); store.bindGamepad('dropThrough', 9);
+    expect(new SettingsStore(storage).get()).toEqual(store.get());
+    store.reset(); expect(store.get()).toEqual(defaultSettings());
   });
 });

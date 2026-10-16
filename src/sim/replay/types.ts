@@ -2,7 +2,8 @@ import type { ArenaData, Fighter, InputCommand } from '../types';
 import type { CombatState } from '../weapons/types';
 import type { MatchSettings } from '../match/types';
 
-export const REPLAY_VERSION = 1 as const;
+/** Version 2 adds sprint/drop-through input bits and persistent drop-through state. */
+export const REPLAY_VERSION = 2 as const;
 export const REPLAY_LIMITS = {
   maxTicks: 60 * 60 * 30,
   maxBytes: 16 * 1024 * 1024,
@@ -31,7 +32,10 @@ export interface ReplayData {
   truncated: boolean;
 }
 
-export const INPUT_BUTTONS = ['jump', 'attack', 'shoot', 'throw', 'special', 'roll', 'block', 'interact'] as const satisfies readonly (keyof InputCommand)[];
+/** Append new buttons only: the first eight positions are the version 1 wire format. */
+export const INPUT_BUTTONS = ['jump', 'attack', 'shoot', 'throw', 'special', 'roll', 'block', 'interact', 'sprint', 'dropThrough'] as const satisfies readonly (keyof InputCommand)[];
+export const INPUT_BUTTON_MASK = (1 << INPUT_BUTTONS.length) - 1;
+export const LEGACY_INPUT_BUTTON_MASK = 0xff;
 
 export class ReplayError extends Error {
   constructor(message: string) { super(message); this.name = 'ReplayError'; }

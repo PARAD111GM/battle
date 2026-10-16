@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ARENAS } from '../src/data/arenas';
 import { World } from '../src/sim/World';
-import { createPlayback, createRecorder, decodeReplay, encodeReplay, REPLAY_LIMITS, validateReplay, type ReplayData } from '../src/sim/replay';
+import { createPlayback, createRecorder, decodeReplay, encodeReplay, REPLAY_LIMITS, REPLAY_VERSION, validateReplay, type ReplayData } from '../src/sim/replay';
+import { recordInputs, restoreInputs } from '../src/sim/replay/inputs';
 import { neutralInput, type ArenaData, type InputCommand } from '../src/sim/types';
 
 function arena(): ArenaData {
@@ -34,6 +35,66 @@ function sample(): ReplayData {
 }
 
 describe('deterministic replay recording and playback', () => {
+  it('appends sprint and drop-through bits without changing the original eight button positions', () => {
+    const oldButtons = { ...neutralInput(), jump: true, attack: true, shoot: true, throw: true, special: true, roll: true, block: true, interact: true };
+    const extended = { ...oldButtons, sprint: true, dropThrough: true, moveX: -0.5, aimY: 0.25, switchWeapon: 4 };
+    const recorded = recordInputs({ 0: oldButtons, 1: extended }, new Set([0, 1]));
+    expect(recorded[0][5]).toBe(255);
+    expect(recorded[1]).toEqual([1, -0.5, 0, 1, 0.25, 1023, 4]);
+    expect(restoreInputs(recorded)).toEqual({ 0: oldButtons, 1: extended });
+    expect(recordInputs({ 0: { ...neutralInput(), sprint: true } }, new Set([0]))[0][5]).toBe(256);
+    expect(recordInputs({ 0: { ...neutralInput(), dropThrough: true } }, new Set([0]))[0][5]).toBe(512);
+    for (const [index, button] of ['jump', 'attack', 'shoot', 'throw', 'special', 'roll', 'block', 'interact'].entries()) {
+      expect(recordInputs({ 0: { ...neutralInput(), [button]: true } }, new Set([0]))[0][5]).toBe(1 << index);
+    }
+  });
+
+  it('round-trips sprint and a platform drop with identical intermediate and final simulation state', () => {
+    const data = arena();
+    data.props = [{ id: 0, type: 'moving-platform', x: 50, y: 400, width: 300, height: 16, travelX: 0, travelY: 0, periodTicks: 120 }];
+    data.spawns = [{ x: 120, y: 381 }, { x: 800, y: 581 }];
+    const world = new World(data, 821, { scoreLimit: 0 });
+    const fighter = world.addFighter();
+    const recorder = createRecorder(world), snapshots: unknown[] = [];
+    let dropped = false;
+    for (let tick = 0; tick < 100; tick++) {
+      world.step({ 0: { ...neutralInput(), moveX: tick < 25 ? 1 : 0, sprint: tick < 25, dropThrough: tick >= 8 && tick < 15 } });
+      dropped ||= fighter.dropThroughState !== null;
+      snapshots.push(structuredClone(state(world)));
+    }
+    expect(dropped).toBe(true);
+    expect(fighter.y).toBeGreaterThan(400);
+    const decoded = decodeReplay(recorder.toJSON());
+    expect(decoded.version).toBe(REPLAY_VERSION);
+    expect(decoded.frames.some(frame => (frame.inputs[0][5] & 256) !== 0)).toBe(true);
+    expect(decoded.frames.some(frame => (frame.inputs[0][5] & 512) !== 0)).toBe(true);
+    const playback = createPlayback(decoded);
+    for (const snapshot of snapshots) { expect(playback.step()).toBe(true); expect(state(playback.world)).toEqual(snapshot); }
+    expect(playback.finished).toBe(true);
+  });
+
+  it.each([
+    { kind: 'tiles' as const, row: 25, startCol: 10, endCol: 17 },
+    { kind: 'prop' as const, propId: 2 },
+  ])('preserves a configured $kind drop-through snapshot and held-button latch', dropThroughState => {
+    const data = arena();
+    data.props.push({ id: 2, type: 'moving-platform', x: 80, y: 400, width: 120, height: 16, travelX: 0, travelY: 0, periodTicks: 120 });
+    const world = new World(data, 71), fighter = world.addFighter({
+      x: dropThroughState.kind === 'tiles' ? 240 : 120,
+      y: dropThroughState.kind === 'tiles' ? 510 : 405,
+      vy: 120, dropThroughHeld: true, dropThroughState,
+    });
+    const recorder = createRecorder(world), replay = createPlayback(recorder.toJSON());
+    expect(replay.data.fighters[0].dropThroughHeld).toBe(true);
+    expect(replay.data.fighters[0].dropThroughState).toEqual(dropThroughState);
+    expect(replay.world.fighters[0]).toEqual(fighter);
+    expect(replay.world.fighters[0].dropThroughState).not.toBe(fighter.dropThroughState);
+    world.step({ 0: { ...neutralInput(), dropThrough: true, sprint: true } });
+    const stepped = createPlayback(recorder.toJSON());
+    stepped.step();
+    expect(state(stepped.world)).toEqual(state(world));
+  });
+
   it('round-trips a seeded bot match with real destruction and restores every simulation subsystem', () => {
     const world = new World(arena(), 7182, { timeLimit: 10, scoreLimit: 0 });
     world.addFighter({ character: 'cinder', hp: 500, maxHp: 500 });
@@ -171,6 +232,49 @@ describe('deterministic replay recording and playback', () => {
 });
 
 describe('replay import validation', () => {
+  it('normalizes version 1 snapshots and leaves both added inputs false during playback', () => {
+    const current = sample();
+    const legacy = JSON.parse(JSON.stringify(current));
+    legacy.version = 1;
+    delete legacy.fighters[0].dropThroughHeld;
+    delete legacy.fighters[0].dropThroughState;
+    const oldJSON = JSON.stringify(legacy), decoded = decodeReplay(oldJSON);
+    expect(decoded.version).toBe(REPLAY_VERSION);
+    expect(decoded.fighters[0].dropThroughHeld).toBe(false);
+    expect(decoded.fighters[0].dropThroughState).toBe(null);
+    expect(restoreInputs(decoded.frames[0].inputs)[0]).toMatchObject({ sprint: false, dropThrough: false });
+    const originalPlayback = createPlayback(current), legacyPlayback = createPlayback(oldJSON);
+    while (originalPlayback.step()) expect(legacyPlayback.step()).toBe(true);
+    expect(state(legacyPlayback.world)).toEqual(state(originalPlayback.world));
+    expect(JSON.stringify(legacy)).toBe(oldJSON);
+    expect(decodeReplay(encodeReplay(decoded))).toEqual(decoded);
+    legacy.fighters[0].dropThroughHeld = true;
+    legacy.fighters[0].dropThroughState = { kind: 'prop', propId: 0 };
+    const normalized = validateReplay(legacy);
+    expect(normalized.fighters[0].dropThroughHeld).toBe(false);
+    expect(normalized.fighters[0].dropThroughState).toBe(null);
+  });
+
+  it('retains the version 1 button-mask bound instead of interpreting old unknown bits', () => {
+    const legacy = JSON.parse(JSON.stringify(sample()));
+    legacy.version = 1;
+    delete legacy.fighters[0].dropThroughHeld;
+    delete legacy.fighters[0].dropThroughState;
+    legacy.frames[0].inputs[0][5] = 255;
+    expect(() => validateReplay(legacy)).not.toThrow();
+    for (const buttons of [256, 512, 1023]) {
+      legacy.frames[0].inputs[0][5] = buttons;
+      expect(() => validateReplay(legacy)).toThrow('buttons');
+    }
+  });
+
+  it.each(['sprint', 'dropThrough'] as const)('requires explicit boolean %s values in newly recorded inputs', button => {
+    for (const value of [undefined, null, 1, 'true']) {
+      const command = { ...neutralInput(), [button]: value } as unknown as InputCommand;
+      expect(() => recordInputs({ 0: command }, new Set([0]))).toThrow('booleans');
+    }
+  });
+
   it.each([
     ['version', (data: any) => { data.version = 999; }],
     ['duration', (data: any) => { data.durationTicks = 500; }],
@@ -187,6 +291,19 @@ describe('replay import validation', () => {
     ['invalid durability', (data: any) => { data.fighters[0].combat.durability.bat = null; }],
     ['missing inventory state', (data: any) => { delete data.fighters[0].combat.ammo.pistol; }],
     ['unsupported match mode', (data: any) => { data.settings.mode = 'unknown'; }],
+    ['unknown button bit', (data: any) => { data.frames[0].inputs[0][5] = 1024; }],
+    ['negative button mask', (data: any) => { data.frames[0].inputs[0][5] = -1; }],
+    ['fractional button mask', (data: any) => { data.frames[0].inputs[0][5] = 0.5; }],
+    ['missing drop button latch', (data: any) => { delete data.fighters[0].dropThroughHeld; }],
+    ['non-boolean drop button latch', (data: any) => { data.fighters[0].dropThroughHeld = 1; }],
+    ['missing drop support state', (data: any) => { delete data.fighters[0].dropThroughState; }],
+    ['unknown drop support kind', (data: any) => { data.fighters[0].dropThroughState = { kind: 'anything' }; }],
+    ['negative drop prop ID', (data: any) => { data.fighters[0].dropThroughState = { kind: 'prop', propId: -1 }; }],
+    ['fractional drop prop ID', (data: any) => { data.fighters[0].dropThroughState = { kind: 'prop', propId: 0.5 }; }],
+    ['out-of-grid drop row', (data: any) => { data.fighters[0].dropThroughState = { kind: 'tiles', row: data.arena.height, startCol: 0, endCol: 2 }; }],
+    ['reversed drop tile span', (data: any) => { data.fighters[0].dropThroughState = { kind: 'tiles', row: 2, startCol: 4, endCol: 2 }; }],
+    ['out-of-grid drop column', (data: any) => { data.fighters[0].dropThroughState = { kind: 'tiles', row: 2, startCol: 0, endCol: data.arena.width }; }],
+    ['non-finite drop row', (data: any) => { data.fighters[0].dropThroughState = { kind: 'tiles', row: NaN, startCol: 0, endCol: 2 }; }],
   ])('rejects malformed %s before constructing a simulation', (_label, mutate) => {
     const data = sample(); mutate(data);
     expect(() => validateReplay(data)).toThrow();

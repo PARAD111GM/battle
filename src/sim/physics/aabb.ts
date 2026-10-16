@@ -1,22 +1,30 @@
-import type { Fighter } from '../types';
+import type { DropThroughState, Fighter } from '../types';
 import type { TileMap } from '../terrain/TileMap';
 
 const EPSILON = 0.00001;
 
+function blocksTile(map: TileMap, col: number, row: number, ignored: DropThroughState | null): boolean {
+  return !(ignored?.kind === 'tiles' && row === ignored.row && col >= ignored.startCol && col <= ignored.endCol) && map.isSolid(col, row);
+}
+
+export function ignoresPlatform(body: Fighter, propId: number): boolean {
+  return body.dropThroughState?.kind === 'prop' && body.dropThroughState.propId === propId;
+}
+
 /** All simulation body positions are their centers, in world pixels. */
-export function overlapsTerrain(map: TileMap, x: number, y: number, width: number, height: number): boolean {
+export function overlapsTerrain(map: TileMap, x: number, y: number, width: number, height: number, ignored: DropThroughState | null = null): boolean {
   const left = Math.floor((x - width / 2 + EPSILON) / map.tileSize);
   const right = Math.floor((x + width / 2 - EPSILON) / map.tileSize);
   const top = Math.floor((y - height / 2 + EPSILON) / map.tileSize);
   const bottom = Math.floor((y + height / 2 - EPSILON) / map.tileSize);
   for (let row = top; row <= bottom; row++) {
-    for (let col = left; col <= right; col++) if (map.isSolid(col, row)) return true;
+    for (let col = left; col <= right; col++) if (blocksTile(map, col, row, ignored)) return true;
   }
   return false;
 }
 
 export function hasGroundSupport(body: Fighter, map: TileMap): boolean {
-  return overlapsTerrain(map, body.x, body.y + body.height / 2 + 0.25, body.width - 0.02, 0.5);
+  return overlapsTerrain(map, body.x, body.y + body.height / 2 + 0.25, body.width - 0.02, 0.5, body.dropThroughState);
 }
 
 export interface CollisionResult { hitWall: boolean; hitCeiling: boolean; landed: boolean }
@@ -38,7 +46,7 @@ export function moveAndCollide(body: Fighter, map: TileMap, dt: number): Collisi
       const bottom = Math.floor((body.y + body.height / 2 - EPSILON) / map.tileSize);
       let resolvedX = body.x;
       for (let row = top; row <= bottom; row++) for (let col = left; col <= right; col++) {
-        if (!map.isSolid(col, row)) continue;
+        if (!blocksTile(map, col, row, body.dropThroughState)) continue;
         resolvedX = dx > 0
           ? Math.min(resolvedX, col * map.tileSize - body.width / 2)
           : Math.max(resolvedX, (col + 1) * map.tileSize + body.width / 2);
@@ -56,7 +64,7 @@ export function moveAndCollide(body: Fighter, map: TileMap, dt: number): Collisi
       const bottom = Math.floor((body.y + body.height / 2 - EPSILON) / map.tileSize);
       let resolvedY = body.y;
       for (let row = top; row <= bottom; row++) for (let col = left; col <= right; col++) {
-        if (!map.isSolid(col, row)) continue;
+        if (!blocksTile(map, col, row, body.dropThroughState)) continue;
         resolvedY = dy > 0
           ? Math.min(resolvedY, row * map.tileSize - body.height / 2)
           : Math.max(resolvedY, (row + 1) * map.tileSize + body.height / 2);

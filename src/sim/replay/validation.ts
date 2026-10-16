@@ -1,9 +1,10 @@
 import { validateArena } from '../../data/arenaValidation';
 import { CHARACTERS } from '../../data/characters';
 import { THROWABLES } from '../../data/combat';
+import type { Fighter } from '../types';
 import type { MatchSettings } from '../match/types';
 import { WEAPONS } from '../weapons/definitions';
-import { REPLAY_LIMITS, REPLAY_VERSION, ReplayError, type RecordedInput, type ReplayCombat, type ReplayData, type ReplayFighter, type ReplayFrame } from './types';
+import { INPUT_BUTTON_MASK, LEGACY_INPUT_BUTTON_MASK, REPLAY_LIMITS, REPLAY_VERSION, ReplayError, type RecordedInput, type ReplayCombat, type ReplayData, type ReplayFighter, type ReplayFrame } from './types';
 
 type ObjectValue = Record<string, unknown>;
 type Range = readonly [number, number, boolean?];
@@ -99,7 +100,18 @@ function combat(value: unknown, path: string): ReplayCombat {
   return result as unknown as ReplayCombat;
 }
 
-function fighter(value: unknown, index: number, width: number, height: number): ReplayFighter {
+function dropThroughState(value: unknown, path: string, columns: number, rows: number): Fighter['dropThroughState'] {
+  if (value === null) return null;
+  const raw = object(value, path);
+  const kind = choice(raw.kind, `${path}.kind`, ['tiles', 'prop']);
+  if (kind === 'prop') return { kind, propId: number(raw.propId, `${path}.propId`, 0, 1_000_000, true) };
+  const row = number(raw.row, `${path}.row`, 0, rows - 1, true);
+  const startCol = number(raw.startCol, `${path}.startCol`, 0, columns - 1, true);
+  const endCol = number(raw.endCol, `${path}.endCol`, startCol, columns - 1, true);
+  return { kind, row, startCol, endCol };
+}
+
+function fighter(value: unknown, index: number, width: number, height: number, columns: number, rows: number, legacy: boolean): ReplayFighter {
   const path = `fighters[${index}]`, raw = object(value, path), result: ObjectValue = {};
   const tick: Range = [0, REPLAY_LIMITS.maxTicks, true];
   numericFields(raw, result, path, {
@@ -117,6 +129,10 @@ function fighter(value: unknown, index: number, width: number, height: number): 
   result.difficulty = choice(raw.difficulty, `${path}.difficulty`, ['easy', 'normal', 'hard', 'expert']);
   result.action = choice(raw.action, `${path}.action`, ['idle', 'run', 'jump', 'fall', 'roll', 'climb', 'hang', 'melee-windup', 'melee-active', 'melee-recovery', 'shoot', 'reload', 'throw-windup', 'throw-recovery', 'block', 'stunned', 'special', 'dead']);
   booleanFields(raw, result, path, ['alive', 'grounded', 'jumpHeld', 'climbing', 'rollHeld']);
+  // Version 1 had neither the input bit nor the support being ignored. Do not
+  // reinterpret unknown legacy properties as newly active simulation state.
+  result.dropThroughHeld = legacy ? false : boolean(raw.dropThroughHeld, `${path}.dropThroughHeld`);
+  result.dropThroughState = legacy ? null : dropThroughState(raw.dropThroughState, `${path}.dropThroughState`, columns, rows);
   if (raw.ledge === null) result.ledge = null;
   else {
     const ledge = object(raw.ledge, `${path}.ledge`);
@@ -130,12 +146,13 @@ function fighter(value: unknown, index: number, width: number, height: number): 
 export function validateReplay(value: unknown): ReplayData {
   const raw = object(value, 'Replay');
   if (raw.format !== 'rivetfall-replay') throw new ReplayError('This is not a Rivetfall replay');
-  if (raw.version !== REPLAY_VERSION) throw new ReplayError('Unsupported replay version');
+  if (raw.version !== 1 && raw.version !== REPLAY_VERSION) throw new ReplayError('Unsupported replay version');
+  const legacy = raw.version === 1;
   const seed = number(raw.seed, 'seed', 0, 0xffffffff, true);
   const arenaResult = validateArena(raw.arena);
   if (!arenaResult.arena) throw new ReplayError(`Invalid replay arena: ${arenaResult.errors.slice(0, 3).join('; ')}`);
   const arena = arenaResult.arena;
-  const fighters = array(raw.fighters, 'fighters', REPLAY_LIMITS.maxFighters, 1).map((entry, index) => fighter(entry, index, arena.width * arena.tileSize, arena.height * arena.tileSize));
+  const fighters = array(raw.fighters, 'fighters', REPLAY_LIMITS.maxFighters, 1).map((entry, index) => fighter(entry, index, arena.width * arena.tileSize, arena.height * arena.tileSize, arena.width, arena.height, legacy));
   const fighterIds = new Set(fighters.map(entry => entry.id));
   if (fighterIds.size !== fighters.length) throw new ReplayError('Fighter IDs must be unique');
   const frames: ReplayFrame[] = [];
@@ -151,7 +168,7 @@ export function validateReplay(value: unknown): ReplayData {
       const id = number(input[0], `${label}.fighterId`, 0, 1023, true);
       if (!fighterIds.has(id) || seen.has(id)) throw new ReplayError(`${label} has an unknown or duplicate fighter ID`);
       seen.add(id);
-      return [id, ...input.slice(1, 5).map((axis, index) => number(axis, `${label}.axis${index}`, -1, 1)), number(input[5], `${label}.buttons`, 0, 255, true), number(input[6], `${label}.switchWeapon`, 0, 4, true)] as RecordedInput;
+      return [id, ...input.slice(1, 5).map((axis, index) => number(axis, `${label}.axis${index}`, -1, 1)), number(input[5], `${label}.buttons`, 0, legacy ? LEGACY_INPUT_BUTTON_MASK : INPUT_BUTTON_MASK, true), number(input[6], `${label}.switchWeapon`, 0, 4, true)] as RecordedInput;
     });
     frames.push({ repeat, inputs });
   }

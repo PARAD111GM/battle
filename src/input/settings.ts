@@ -1,15 +1,16 @@
-export const ACTIONS = ['left', 'right', 'up', 'down', 'jump', 'attack', 'shoot', 'throw', 'special', 'roll', 'block', 'interact', 'switch', 'slot1', 'slot2', 'slot3'] as const;
+export const ACTIONS = ['left', 'right', 'up', 'down', 'jump', 'attack', 'shoot', 'throw', 'special', 'roll', 'sprint', 'dropThrough', 'block', 'interact', 'switch', 'slot1', 'slot2', 'slot3'] as const;
 export type BindingAction = typeof ACTIONS[number];
 export type KeyboardBindings = Record<BindingAction, string>;
-export const ACTION_LABELS: Record<BindingAction, string> = { left: 'Move left', right: 'Move right', up: 'Climb / aim up', down: 'Drop / aim down', jump: 'Jump', attack: 'Melee attack', shoot: 'Fire weapon', throw: 'Throw grenade', special: 'Character special', roll: 'Dodge roll', block: 'Block', interact: 'Pick up / interact', switch: 'Cycle weapon', slot1: 'Primary weapon', slot2: 'Sidearm', slot3: 'Melee weapon' };
-export const DEFAULT_BINDINGS: KeyboardBindings = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', jump: 'Space', attack: 'KeyJ', shoot: 'KeyK', throw: 'KeyG', special: 'KeyQ', roll: 'ShiftLeft', block: 'KeyL', interact: 'KeyE', switch: 'KeyR', slot1: 'Digit1', slot2: 'Digit2', slot3: 'Digit3' };
-export const SECONDARY_BINDINGS: KeyboardBindings = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', jump: 'Enter', attack: 'Comma', shoot: 'Period', throw: 'Slash', special: 'Semicolon', roll: 'ShiftRight', block: 'Quote', interact: 'Backslash', switch: 'BracketRight', slot1: 'Digit7', slot2: 'Digit8', slot3: 'Digit9' };
+export const ACTION_LABELS: Record<BindingAction, string> = { left: 'Move left', right: 'Move right', up: 'Climb / aim up', down: 'Duck / aim down', jump: 'Jump', attack: 'Melee attack', shoot: 'Fire weapon', throw: 'Throw grenade', special: 'Character special', roll: 'Dodge roll', sprint: 'Sprint (hold)', dropThrough: 'Drop through platform', block: 'Block', interact: 'Pick up / interact', switch: 'Cycle weapon', slot1: 'Primary weapon', slot2: 'Sidearm', slot3: 'Melee weapon' };
+export const DEFAULT_BINDINGS: KeyboardBindings = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', jump: 'Space', attack: 'KeyJ', shoot: 'KeyK', throw: 'KeyG', special: 'KeyQ', roll: '', sprint: '', dropThrough: '', block: 'KeyL', interact: 'KeyE', switch: 'KeyR', slot1: 'Digit1', slot2: 'Digit2', slot3: 'Digit3' };
+export const SECONDARY_BINDINGS: KeyboardBindings = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', jump: 'Enter', attack: 'Comma', shoot: 'Period', throw: 'Slash', special: 'Semicolon', roll: '', sprint: '', dropThrough: '', block: 'Quote', interact: 'Backslash', switch: 'BracketRight', slot1: 'Digit7', slot2: 'Digit8', slot3: 'Digit9' };
 export type AxisAction = 'moveX' | 'moveY' | 'aimX' | 'aimY';
 export interface GameSettings {
   version: 1;
   keyboard: [KeyboardBindings, KeyboardBindings];
   mouse: { attack: number; shoot: number };
   gamepad: { buttons: Record<BindingAction, number>; axes: Record<AxisAction, number>; deadzone: number; invertAimY: boolean };
+  gestures: { sprintDoubleTap: boolean; dropThroughDoubleTap: boolean; rollWithDown: boolean; doubleTapWindowMs: number };
   audio: { master: number; sfx: number; music: number };
   effects: { screenShake: boolean; hitstop: boolean };
 }
@@ -17,13 +18,15 @@ export interface SettingsPatch {
   keyboard?: [Partial<KeyboardBindings>?, Partial<KeyboardBindings>?];
   mouse?: Partial<GameSettings['mouse']>;
   gamepad?: { buttons?: Partial<GameSettings['gamepad']['buttons']>; axes?: Partial<GameSettings['gamepad']['axes']>; deadzone?: number; invertAimY?: boolean };
+  gestures?: Partial<GameSettings['gestures']>;
   audio?: Partial<GameSettings['audio']>;
   effects?: Partial<GameSettings['effects']>;
 }
 export const SETTINGS_KEY = 'rivetfall.settings.v1';
 export function defaultSettings(): GameSettings {
   return { version: 1, keyboard: [{ ...DEFAULT_BINDINGS }, { ...SECONDARY_BINDINGS }], mouse: { attack: 2, shoot: 0 },
-    gamepad: { buttons: { left: 14, right: 15, up: 12, down: 13, jump: 0, attack: 2, shoot: 7, throw: 5, special: 3, roll: 1, block: 6, interact: 4, switch: 10, slot1: -1, slot2: -1, slot3: -1 }, axes: { moveX: 0, moveY: 1, aimX: 2, aimY: 3 }, deadzone: 0.2, invertAimY: false },
+    gamepad: { buttons: { left: 14, right: 15, up: 12, down: 13, jump: 0, attack: 2, shoot: 7, throw: 5, special: 3, roll: -1, sprint: -1, dropThrough: -1, block: 6, interact: 4, switch: 10, slot1: -1, slot2: -1, slot3: -1 }, axes: { moveX: 0, moveY: 1, aimX: 2, aimY: 3 }, deadzone: 0.2, invertAimY: false },
+    gestures: { sprintDoubleTap: true, dropThroughDoubleTap: true, rollWithDown: true, doubleTapWindowMs: 250 },
     audio: { master: 0.8, sfx: 0.85, music: 0.35 }, effects: { screenShake: true, hitstop: true } };
 }
 const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -56,7 +59,9 @@ export function normalizeSettings(value: unknown): GameSettings {
   for (const axis of ['moveX', 'moveY', 'aimX', 'aimY'] as const) result.gamepad.axes[axis] = integer(axes[axis], 7, result.gamepad.axes[axis]);
   result.gamepad.deadzone = bounded(gamepad.deadzone, 0.05, 0.8, result.gamepad.deadzone);
   if (typeof gamepad.invertAimY === 'boolean') result.gamepad.invertAimY = gamepad.invertAimY;
-  const audio = record(source.audio), effects = record(source.effects);
+  const gestures = record(source.gestures), audio = record(source.audio), effects = record(source.effects);
+  for (const key of ['sprintDoubleTap', 'dropThroughDoubleTap', 'rollWithDown'] as const) if (typeof gestures[key] === 'boolean') result.gestures[key] = gestures[key];
+  result.gestures.doubleTapWindowMs = bounded(gestures.doubleTapWindowMs, 100, 500, result.gestures.doubleTapWindowMs);
   for (const key of ['master', 'sfx', 'music'] as const) result.audio[key] = bounded(audio[key], 0, 1, result.audio[key]);
   for (const key of ['screenShake', 'hitstop'] as const) if (typeof effects[key] === 'boolean') result.effects[key] = effects[key];
   return result;
@@ -80,7 +85,7 @@ export class SettingsStore {
   update(patch: SettingsPatch): void {
     const current = this.value;
     this.commit({ ...current, keyboard: [{ ...current.keyboard[0], ...patch.keyboard?.[0] }, { ...current.keyboard[1], ...patch.keyboard?.[1] }],
-      mouse: { ...current.mouse, ...patch.mouse }, audio: { ...current.audio, ...patch.audio }, effects: { ...current.effects, ...patch.effects },
+      mouse: { ...current.mouse, ...patch.mouse }, gestures: { ...current.gestures, ...patch.gestures }, audio: { ...current.audio, ...patch.audio }, effects: { ...current.effects, ...patch.effects },
       gamepad: { ...current.gamepad, ...patch.gamepad, buttons: { ...current.gamepad.buttons, ...patch.gamepad?.buttons }, axes: { ...current.gamepad.axes, ...patch.gamepad?.axes } } });
   }
   bindKeyboard(player: 0 | 1, action: BindingAction, code: string): string {

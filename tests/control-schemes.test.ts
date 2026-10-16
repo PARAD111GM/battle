@@ -13,11 +13,12 @@ function customSettings() {
   value.keyboard[0].jump = 'KeyV'; value.keyboard[1].jump = 'KeyB';
   value.mouse = { attack: 0, shoot: 2 };
   value.gamepad.buttons.slot1 = 11; value.gamepad.axes.aimX = 4; value.gamepad.deadzone = 0.35; value.gamepad.invertAimY = true;
+  value.gestures = { sprintDoubleTap: false, dropThroughDoubleTap: true, rollWithDown: false, doubleTapWindowMs: 400 };
   value.audio = { master: 0, sfx: 0.1, music: 0.2 }; value.effects = { screenShake: false, hitstop: false };
   return value;
 }
 
-const controlsOf = (current = defaultSettings()) => ({ keyboard: current.keyboard, mouse: current.mouse, gamepad: current.gamepad });
+const controlsOf = (current = defaultSettings()) => ({ keyboard: current.keyboard, mouse: current.mouse, gamepad: current.gamepad, gestures: current.gestures });
 
 describe('named control scheme snapshots', () => {
   it('persists and restores both keyboards, mouse, gamepad and active selection without audio or effects', () => {
@@ -25,7 +26,7 @@ describe('named control scheme snapshots', () => {
     const scheme = store.save('  Couch crew  ', current);
     expect(scheme.name).toBe('Couch crew'); expect(store.activeId).toBe(scheme.id);
     expect(scheme.controls).toEqual(controlsOf(current));
-    expect(Object.keys(scheme.controls).sort()).toEqual(['gamepad', 'keyboard', 'mouse']);
+    expect(Object.keys(scheme.controls).sort()).toEqual(['gamepad', 'gestures', 'keyboard', 'mouse']);
     const document = JSON.parse(storage.saved()!);
     expect(document.version).toBe(1);
     expect(document.schemes[0].controls.audio).toBeUndefined(); expect(document.schemes[0].controls.effects).toBeUndefined();
@@ -36,10 +37,10 @@ describe('named control scheme snapshots', () => {
   it('keeps snapshots isolated from live settings and every returned value', () => {
     const store = new ControlSchemesStore(null), current = customSettings();
     const saved = store.save('Independent', current), expected = structuredClone(saved);
-    current.keyboard[0].jump = 'KeyC'; current.gamepad.axes.aimX = 7; current.mouse.attack = 1;
+    current.keyboard[0].jump = 'KeyC'; current.gamepad.axes.aimX = 7; current.mouse.attack = 1; current.gestures.doubleTapWindowMs = 100;
     saved.name = 'Changed outside'; saved.controls.keyboard[1].jump = 'KeyZ';
     const listed = store.list(); listed[0].controls.gamepad.buttons.jump = 9; listed.pop();
-    const fetched = store.get(saved.id)!; fetched.controls.mouse.shoot = 4;
+    const fetched = store.get(saved.id)!; fetched.controls.mouse.shoot = 4; fetched.controls.gestures.sprintDoubleTap = true;
     expect(store.get(saved.id)).toEqual(expected); expect(store.list()).toHaveLength(1);
   });
 
@@ -128,7 +129,7 @@ describe('named control scheme snapshots', () => {
     const good = store.get('good')!;
     expect(good.name).toBe('Saved'); expect(good.controls.keyboard[0].jump).toBe('Space'); expect(good.controls.keyboard[0].attack).toBe('KeyV');
     expect(good.controls.mouse.attack).toBe(2); expect(good.controls.gamepad.axes.aimX).toBe(2); expect(good.controls.gamepad.deadzone).toBe(0.8);
-    expect(Object.keys(good.controls).sort()).toEqual(['gamepad', 'keyboard', 'mouse']);
+    expect(Object.keys(good.controls).sort()).toEqual(['gamepad', 'gestures', 'keyboard', 'mouse']);
   });
 
   it('bounds restored libraries and clears selection if its entry was discarded by the limit', () => {
@@ -146,5 +147,17 @@ describe('named control scheme snapshots', () => {
       store.rename(first.id, 'Session renamed'); store.select(null); store.select(first.id); store.remove(first.id);
       expect(store.list()).toEqual([]); expect(store.activeId).toBeNull(); expect(store.persistent).toBe(false);
     }
+  });
+
+  it('migrates older scheme snapshots to gesture defaults while preserving their saved dedicated roll', () => {
+    const raw = { version: 1, activeId: 'legacy', schemes: [{ id: 'legacy', name: 'Legacy', controls: {
+      keyboard: [{ roll: 'ShiftLeft' }, { roll: 'ShiftRight' }], mouse: { attack: 2, shoot: 0 }, gamepad: { buttons: { roll: 1 } },
+    } }] };
+    const storage = memoryStorage(JSON.stringify(raw)), store = new ControlSchemesStore(storage), migrated = store.get('legacy')!;
+    expect(migrated.controls.gestures).toEqual(defaultSettings().gestures);
+    expect(migrated.controls.keyboard[0].roll).toBe('ShiftLeft'); expect(migrated.controls.gamepad.buttons.roll).toBe(1);
+    expect(migrated.controls.keyboard[0].sprint).toBe(''); expect(migrated.controls.gamepad.buttons.dropThrough).toBe(-1);
+    store.rename('legacy', 'Migrated');
+    expect(new ControlSchemesStore(storage).get('legacy')!.controls).toEqual(migrated.controls);
   });
 });

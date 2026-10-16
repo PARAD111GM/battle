@@ -12,8 +12,8 @@ try {
   const schemes = page.locator('[data-control-scheme]');
   const name = page.getByLabel('Control scheme name');
   const controls = () => page.evaluate(() => {
-    const { keyboard, mouse, gamepad } = window.__RIVETFALL__.settings.get();
-    return { keyboard, mouse, gamepad };
+    const { keyboard, mouse, gamepad, gestures } = window.__RIVETFALL__.settings.get();
+    return { keyboard, mouse, gamepad, gestures };
   });
   const bind = async (player, action, key) => {
     await page.locator(`[data-controls-tab="keyboard${player}"]`).click();
@@ -60,6 +60,8 @@ try {
   expect((await controls()).keyboard[0].attack).toBe(originalAttack);
   await expect(page.locator('.capturing')).toHaveCount(0);
   await name.fill('');
+  for (const gesture of ['sprintDoubleTap', 'dropThroughDoubleTap', 'rollWithDown']) await expect(page.locator(`[data-gesture="${gesture}"]`)).toBeChecked();
+  await expect(page.locator('[data-double-tap-window]')).toHaveValue('250');
 
   // Each scheme must capture both local keyboards and the complete mouse/gamepad mapping.
   await bind(1, 'jump', 'v'); await bind(2, 'jump', 'b');
@@ -68,10 +70,15 @@ try {
   await page.locator('[data-pad-bind="jump"]').selectOption('11');
   await page.locator('[data-axis="aimX"]').selectOption('4');
   await range('[data-deadzone]', 35); await page.locator('[data-invert-aim]').check();
+  await page.locator('[data-gesture="sprintDoubleTap"]').uncheck();
+  await page.locator('[data-gesture="rollWithDown"]').uncheck();
+  await range('[data-double-tap-window]', 340);
+  await expect(page.locator('[data-double-tap-output]')).toContainText('340');
   const firstControls = await controls();
   expect(firstControls.keyboard.map(binding => binding.jump)).toEqual(['KeyV', 'KeyB']);
   expect(firstControls.mouse).toEqual({ attack: 0, shoot: 2 });
   expect(firstControls.gamepad).toMatchObject({ buttons: { jump: 11 }, axes: { aimX: 4 }, deadzone: .35, invertAimY: true });
+  expect(firstControls.gestures).toEqual({ sprintDoubleTap: false, dropThroughDoubleTap: true, rollWithDown: false, doubleTapWindowMs: 340 });
   const firstId = await saveNew('Arcade Crew');
   await expect(page.locator('[data-scheme-state]')).toHaveText('Saved scheme');
   await expect(page.locator('[data-scheme-state]')).toHaveAttribute('data-modified', 'false');
@@ -84,6 +91,10 @@ try {
   await page.locator('[data-pad-bind="jump"]').selectOption('9');
   await page.locator('[data-axis="aimX"]').selectOption('5');
   await range('[data-deadzone]', 45); await page.locator('[data-invert-aim]').uncheck();
+  await page.locator('[data-gesture="sprintDoubleTap"]').check();
+  await page.locator('[data-gesture="dropThroughDoubleTap"]').uncheck();
+  await page.locator('[data-gesture="rollWithDown"]').check();
+  await range('[data-double-tap-window]', 180);
   const secondControls = await controls();
   const secondId = await saveNew('Alternate Crew');
   expect(secondId).not.toBe(firstId);
@@ -131,6 +142,7 @@ try {
   await schemes.selectOption(firstId); expect(await controls()).toEqual(updatedControls);
   await page.locator('[data-pref-reset]').click();
   expect((await controls()).keyboard[0].jump).toBe('Space');
+  expect((await controls()).gestures).toEqual({ sprintDoubleTap: true, dropThroughDoubleTap: true, rollWithDown: true, doubleTapWindowMs: 250 });
   await expect(schemes).toHaveValue(''); await expect(schemes.locator('option')).toHaveCount(2);
   expect(await page.evaluate(() => {
     const { audio, effects } = window.__RIVETFALL__.settings.get(); return { audio, effects };
@@ -142,6 +154,10 @@ try {
   await page.locator('[data-key-bind="attack"]').click(); await page.keyboard.press('Escape');
   await expect(overlay).toHaveAttribute('data-screen', 'settings');
   expect(await controls()).toEqual(updatedControls);
+  await expect(page.locator('[data-gesture="sprintDoubleTap"]')).not.toBeChecked();
+  await expect(page.locator('[data-gesture="dropThroughDoubleTap"]')).toBeChecked();
+  await expect(page.locator('[data-gesture="rollWithDown"]')).not.toBeChecked();
+  await expect(page.locator('[data-double-tap-window]')).toHaveValue('340');
   await page.keyboard.press('Escape'); await expect(overlay).toHaveAttribute('data-screen', 'controls');
   await expect(page.locator('.controls-table tr').filter({ hasText: 'Jump' })).toContainText('C');
   await page.locator('[data-action="back"]').click(); await expect(overlay).toHaveAttribute('data-screen', 'menu');
@@ -165,7 +181,7 @@ try {
     const { audio, effects } = window.__RIVETFALL__.settings.get(); return { audio, effects };
   })).toEqual(preferences);
   await mkdir('test-results', { recursive: true });
-  await page.screenshot({ path: 'test-results/control-schemes.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/controls-gestures-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/mobile-control-schemes.png', fullPage: true });
@@ -199,5 +215,5 @@ try {
   await page.waitForFunction(tick => window.__RIVETFALL__.world.tick > tick, pausedTick);
 
   expect(errors).toEqual([]);
-  console.log(JSON.stringify({ schemes: 'save/select/update/rename/duplicate rejection/delete passed', controls: 'both keyboards, mouse, gamepad button/axes/deadzone/inversion restored', audioAndEffects: 'preserved on scheme load', persistence: 'profiles, selected scheme, bindings and preferences restored after reload', navigation: 'Controls/customize/back preserves main and paused match', input: 'saved C and B bindings jump both real human fighters', mobileOverflow: 'none', errors }, null, 2));
+  console.log(JSON.stringify({ schemes: 'save/select/update/rename/duplicate rejection/delete passed', controls: 'both keyboards, mouse, gamepad and gesture toggles/timing restored', audioAndEffects: 'preserved on scheme load', persistence: 'profiles, selected scheme, bindings and preferences restored after reload', navigation: 'Controls/customize/back preserves main and paused match', input: 'saved C and B bindings jump both real human fighters', mobileOverflow: 'none', errors }, null, 2));
 } finally { await browser.close(); }

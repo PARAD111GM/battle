@@ -72,6 +72,7 @@ export class World {
       width: TUNING.fighter.width, height: TUNING.fighter.height, facing: id % 2 === 0 ? 1 : -1,
       hp: characterHp, maxHp: characterHp, damage: 0, stocks: this.settings.stocks, alive: true,
       grounded: false, coyoteTicks: 0, jumpBufferTicks: 0, jumpHeld: false, rollHeld: false,
+      dropThroughHeld: false, dropThroughState: null,
       action: 'idle', actionTicks: 0, rollCooldown: 0, invulnerableTicks: 0,
       respawnTicks: 0, climbing: false, climbCooldownTicks: 0, ledge: null,
       combat: createCombatState(),
@@ -206,6 +207,7 @@ export class World {
     fighter.alive = false; fighter.hp = 0; fighter.stocks = Math.max(0, fighter.stocks - 1);
     fighter.action = 'dead'; fighter.respawnTicks = TUNING.fighter.respawnTicks;
     fighter.vx = fighter.vy = 0; fighter.climbing = false; fighter.ledge = null;
+    fighter.dropThroughHeld = false; fighter.dropThroughState = null;
     fighter.combat.deaths++;
     fighter.combat.cookTicks = 0; fighter.combat.grabTarget = null;
     const killer = this.fighters.find(other => other.id === owner && other !== fighter);
@@ -221,6 +223,7 @@ export class World {
       x: spawn.x, y: spawn.y, vx: 0, vy: 0, hp: fighter.maxHp, damage: 0, alive: true,
       action: 'idle', actionTicks: 0, grounded: false, climbing: false, ledge: null,
       coyoteTicks: 0, jumpBufferTicks: 0, jumpHeld: false, rollHeld: false,
+      dropThroughHeld: false, dropThroughState: null,
       climbCooldownTicks: 0, rollCooldown: 0, invulnerableTicks: TUNING.fighter.spawnInvulnerabilityTicks,
       combat: { ...createCombatState(), kills, deaths, damageDealt, shots, hits },
     });

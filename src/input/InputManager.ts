@@ -1,6 +1,7 @@
 import { neutralInput, type InputCommand } from '../sim/types';
 
 import { settings, type BindingAction, type KeyboardBindings } from './settings';
+import { MovementGestures, axisDirections } from './MovementGestures';
 export { DEFAULT_BINDINGS, SECONDARY_BINDINGS } from './settings';
 export type { BindingAction } from './settings';
 
@@ -8,16 +9,16 @@ export type { BindingAction } from './settings';
 export const CONTROLS = {
   keyboardPrimary: {
     move: 'WASD', aim: 'Mouse / WASD', jump: 'Space', attack: 'J / Right mouse',
-    shoot: 'K / Left mouse', throw: 'G', special: 'Q', roll: 'Left Shift',
+    shoot: 'K / Left mouse', throw: 'G', special: 'Q', roll: 'Down + left / right', sprint: 'Double-tap left / right', dropThrough: 'Double-tap down',
     block: 'L', interact: 'E', switch: 'R', slots: '1 / 2 / 3',
   },
   keyboardSecondary: {
     move: 'Arrow keys', aim: 'Arrow keys', jump: 'Enter', attack: ',', shoot: '.',
-    throw: '/', special: ';', roll: 'Right Shift', block: "'", interact: '\\', switch: ']', slots: '7 / 8 / 9',
+    throw: '/', special: ';', roll: 'Down + left / right', sprint: 'Double-tap left / right', dropThrough: 'Double-tap down', block: "'", interact: '\\', switch: ']', slots: '7 / 8 / 9',
   },
   gamepad: {
     move: 'Left stick / D-pad', aim: 'Right stick', jump: 'A / Cross', attack: 'X / Square',
-    shoot: 'RT / R2', throw: 'RB / R1', special: 'Y / Triangle', roll: 'B / Circle',
+    shoot: 'RT / R2', throw: 'RB / R1', special: 'Y / Triangle', roll: 'Down + left / right', sprint: 'Double-tap left / right', dropThrough: 'Double-tap down',
     block: 'LT / L2', interact: 'LB / L1', switch: 'Left stick click',
   },
 } as const;
@@ -44,6 +45,8 @@ export class InputManager {
   private pendingPadButtons = new Map<number, Set<number>>();
   private keyboardFacing = new Map<number, number>();
   private gamepadAim = new Map<number, { x: number; y: number }>();
+  private keyboardGestures = [new MovementGestures(), new MovementGestures()];
+  private padGestures = new Map<number, MovementGestures>();
   get bindings(): KeyboardBindings { return settings.get().keyboard[0]; }
   set bindings(value: KeyboardBindings) { settings.update({ keyboard: [value] }); }
 
@@ -52,11 +55,16 @@ export class InputManager {
       if (isInterfaceTarget(event.target) || event.altKey || event.ctrlKey || event.metaKey) return;
       const gameplayKeys = settings.get().keyboard.flatMap(bindings => Object.values(bindings));
       if (!gameplayKeys.includes(event.code)) return;
-      if (!event.repeat && !this.pressed.has(event.code)) this.pendingKeys.add(event.code);
-      this.pressed.add(event.code);
+      if (!event.repeat && !this.pressed.has(event.code)) {
+        this.pendingKeys.add(event.code);
+        this.pressed.add(event.code);
+        this.sampleKeyboardGestures();
+      }
       event.preventDefault();
     });
-    window.addEventListener('keyup', event => this.pressed.delete(event.code));
+    window.addEventListener('keyup', event => {
+      if (this.pressed.delete(event.code)) this.sampleKeyboardGestures();
+    });
     window.addEventListener('blur', () => this.reset());
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.reset(); });
     window.addEventListener('focusin', event => { if (isInterfaceTarget(event.target)) this.reset(); });
@@ -94,11 +102,23 @@ export class InputManager {
   reset(): void {
     this.pressed.clear(); this.pendingKeys.clear(); this.mouseButtons.clear(); this.pendingMouse.clear();
     this.pendingPadButtons.clear();
+    for (const gesture of this.keyboardGestures) gesture.reset();
+    // Gamepads keep reporting held axes after reset; that unchanged state is not a fresh tap.
+    for (const gesture of this.padGestures.values()) gesture.reset(gesture.directions);
     this.mouse.left = false; this.mouse.right = false; this.mouse.active = false;
   }
 
   connectedGamepads(): number[] {
     return availableGamepads().filter((pad): pad is Gamepad => Boolean(pad?.connected)).map(pad => pad.index);
+  }
+
+  private sampleKeyboardGestures(): void {
+    const config = settings.get(), time = performance.now();
+    for (const player of [0, 1] as const) {
+      const bindings = config.keyboard[player];
+      this.keyboardGestures[player].update({ left: this.pressed.has(bindings.left), right: this.pressed.has(bindings.right),
+        up: this.pressed.has(bindings.up), down: this.pressed.has(bindings.down) }, time, config.gestures);
+    }
   }
 
   keyboard(player = 0, aimOrigin?: { x: number; y: number }): InputCommand {
@@ -117,10 +137,15 @@ export class InputManager {
     const mouse = (action: 'attack' | 'shoot') => player === 0 && config.mouse[action] >= 0 &&
       (this.mouseButtons.has(config.mouse[action]) || this.pendingMouse.has(config.mouse[action]));
     const slot = (['slot1', 'slot2', 'slot3'] as const).findIndex(has);
+    const gestures = this.keyboardGestures[player === 0 ? 0 : 1];
+    if (this.pendingKeys.has(bindings.dropThrough)) gestures.requestDrop();
+    const movement = gestures.consume();
     const command: InputCommand = {
       moveX: x, moveY: y, aimX: ax / length, aimY: ay / length,
       jump: has('jump'), attack: has('attack') || mouse('attack'), shoot: has('shoot') || mouse('shoot'),
-      throw: has('throw'), special: has('special'), roll: has('roll'), block: has('block'), interact: has('interact'),
+      throw: has('throw'), special: has('special'), roll: !movement.dropThrough && (has('roll') || movement.roll),
+      sprint: this.pressed.has(bindings.sprint) || movement.sprint, dropThrough: movement.dropThrough,
+      block: has('block'), interact: has('interact'),
       switchWeapon: slot >= 0 ? slot + 2 : has('switch') ? 1 : 0,
     };
     for (const code of Object.values(bindings)) this.pendingKeys.delete(code);
@@ -138,11 +163,30 @@ export class InputManager {
         if (button.pressed) { next.add(index); if (!previous.has(index)) pending.add(index); }
       });
       this.padButtons.set(pad.index, next); this.pendingPadButtons.set(pad.index, pending);
+      const gestures = this.padGestures.get(pad.index) ?? new MovementGestures();
+      const { x, y } = this.padMovement(pad);
+      const config = settings.get(), directions = axisDirections(x, y, gestures.directions);
+      // Preserve opposing D-pad buttons: releasing one held direction is not a new tap of the other.
+      for (const [negative, positive] of [['left', 'right'], ['up', 'down']] as const) {
+        const negativeHeld = next.has(config.gamepad.buttons[negative]), positiveHeld = next.has(config.gamepad.buttons[positive]);
+        if (negativeHeld || positiveHeld) { directions[negative] = negativeHeld; directions[positive] = positiveHeld; }
+      }
+      gestures.update(directions, performance.now(), config.gestures);
+      this.padGestures.set(pad.index, gestures);
     }
     for (const index of this.padButtons.keys()) if (!connected.has(index)) {
-      this.padButtons.delete(index); this.pendingPadButtons.delete(index); this.gamepadAim.delete(index);
+      this.padButtons.delete(index); this.pendingPadButtons.delete(index); this.gamepadAim.delete(index); this.padGestures.delete(index);
     }
     return pads;
+  }
+
+  private padMovement(pad: Gamepad): { x: number; y: number } {
+    const config = settings.get().gamepad;
+    const down = (action: BindingAction) => Boolean(pad.buttons[config.buttons[action]]?.pressed);
+    const dead = (value: number) => Math.abs(value) > config.deadzone ? Math.max(-1, Math.min(1, value)) : 0;
+    const left = down('left'), right = down('right'), up = down('up'), downwards = down('down');
+    return { x: left || right ? Number(right) - Number(left) : dead(pad.axes[config.axes.moveX] ?? 0),
+      y: up || downwards ? Number(downwards) - Number(up) : dead(pad.axes[config.axes.moveY] ?? 0) };
   }
 
   gamepad(index: number): InputCommand {
@@ -154,18 +198,20 @@ export class InputManager {
       const button = config.buttons[action];
       return button >= 0 && (Boolean(pad.buttons[button]?.pressed) || (buffer && Boolean(pending?.has(button))));
     };
-    const left = down('left', false), right = down('right', false), up = down('up', false), downwards = down('down', false);
-    const x = left || right ? Number(right) - Number(left) : dead(pad.axes[config.axes.moveX] ?? 0);
-    const y = up || downwards ? Number(downwards) - Number(up) : dead(pad.axes[config.axes.moveY] ?? 0);
+    const { x, y } = this.padMovement(pad);
     const ax = dead(pad.axes[config.axes.aimX] ?? 0), ay = dead(pad.axes[config.axes.aimY] ?? 0) * (config.invertAimY ? -1 : 1);
     if (ax || ay) {
       const length = Math.hypot(ax, ay); this.gamepadAim.set(index, { x: ax / length, y: ay / length });
     }
     const aim = this.gamepadAim.get(index) ?? { x: 1, y: 0 };
     const slot = (['slot1', 'slot2', 'slot3'] as const).findIndex(action => down(action));
+    const gestures = this.padGestures.get(index)!;
+    if (pending?.has(config.buttons.dropThrough)) gestures.requestDrop();
+    const movement = gestures.consume();
     const command: InputCommand = {
       moveX: x, moveY: y, aimX: aim.x, aimY: aim.y, jump: down('jump'), attack: down('attack'),
-      shoot: down('shoot'), throw: down('throw'), special: down('special'), roll: down('roll'), block: down('block'),
+      shoot: down('shoot'), throw: down('throw'), special: down('special'), roll: !movement.dropThrough && (down('roll') || movement.roll),
+      sprint: down('sprint', false) || movement.sprint, dropThrough: movement.dropThrough, block: down('block'),
       interact: down('interact'), switchWeapon: slot >= 0 ? slot + 2 : down('switch') ? 1 : 0,
     };
     pending?.clear();

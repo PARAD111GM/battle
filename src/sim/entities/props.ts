@@ -1,7 +1,7 @@
 import { TUNING } from '../../data/tuning';
 import { MATERIALS } from '../../data/materials';
 import { WORLD_TUNING } from '../../data/worldTuning';
-import { overlapsTerrain } from '../physics/aabb';
+import { ignoresPlatform, overlapsTerrain } from '../physics/aabb';
 import type { ArenaProp, Fighter } from '../types';
 import type { World } from '../World';
 import { integrateRigid } from './rigid';
@@ -41,7 +41,7 @@ export function activeClimbables(world: World): ArenaProp[] {
 /** Current geometry used by locomotion, including one-way platform surfaces. */
 export function activeMovementProps(world: World): ArenaProp[] {
   return world.props.filter(prop => prop.active && (isPlatform(prop) || (!prop.broken && (prop.type === 'ladder' || prop.type === 'rope'))))
-    .map(prop => ({ id: prop.id, type: prop.type, x: prop.x - prop.width / 2, y: prop.y - prop.height / 2, width: prop.width, height: prop.height }));
+    .map(prop => ({ id: prop.id, type: prop.type, x: prop.x - prop.width / 2, y: prop.y - prop.height / 2, width: prop.width, height: prop.height, vx: prop.vx, vy: prop.vy }));
 }
 
 /** Move platforms before fighters so standing bodies inherit their exact displacement. */
@@ -65,7 +65,7 @@ export function preStepProps(world: World): void {
     frame.platforms.set(prop.id, { x: oldX, y: oldY });
     const progress = (1 - Math.cos(world.tick / prop.periodTicks * Math.PI * 2)) / 2;
     const targetX = prop.originX + prop.travelX * progress, targetY = prop.originY + prop.travelY * progress;
-    const riders = world.fighters.filter(fighter => fighter.alive && fighter.vy >= 0
+    const riders = world.fighters.filter(fighter => fighter.alive && fighter.vy >= 0 && !ignoresPlatform(fighter, prop.id)
       && Math.abs(fighter.y + fighter.height / 2 - oldTop) <= 3
       && Math.abs(fighter.x - oldX) < (fighter.width + prop.width) / 2);
     // Sweep both the platform and its riders; a blocked authored route must not
@@ -252,6 +252,7 @@ function resolveInteractiveSurfaces(world: World): void {
     for (const prop of world.props) {
       if (!prop.active) continue;
       if (isPlatform(prop)) {
+        if (ignoresPlatform(fighter, prop.id)) continue;
         const old = frame.platforms.get(prop.id) ?? prop;
         const oldTop = old.y - prop.height / 2, top = prop.y - prop.height / 2;
         if (fighter.vy >= 0 && before.y + fighter.height / 2 <= oldTop + 3 && fighter.y + fighter.height / 2 >= top

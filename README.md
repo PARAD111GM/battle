@@ -19,6 +19,16 @@ Alternatively, choose **Code → Download ZIP** on GitHub, extract the ZIP, and 
 
 Keep the terminal open and open the address printed by Vite in your browser, normally `http://localhost:5173` on your own computer. Click **Enter the Arena → Quick Match** to play against three bots. Press **Ctrl+C** in the terminal to stop the server. After the first installation, start it again with `npm run dev` from the same folder.
 
+To update an existing Git clone, stop the server, then run these commands from the `battle` folder:
+
+```sh
+git pull --ff-only origin main
+npm ci
+npm run dev
+```
+
+If you play the standalone HTML, run `npm run bundle:standalone` after updating and open the newly generated file. Browser settings and named control schemes are retained.
+
 ### Build a single file for offline play
 
 After installing dependencies, run:
@@ -79,7 +89,9 @@ Ironworks has warehouse catwalks and explosive cover. Skyline has rooftop gaps, 
 | Fire | K / left mouse | Period | RT / R2 |
 | Cook / release throwable | Hold / release G | Slash | RB / R1 |
 | Special | Q | Semicolon | Y / Triangle |
-| Dodge roll | Left Shift | Right Shift | B / Circle |
+| Sprint · 2× movement speed | Double-tap A or D, then hold | Double-tap ← or →, then hold | Double-tap left/right, then hold |
+| Dodge roll | S + A or D | ↓ + ← or → | Down + left/right |
+| Drop through platform | Double-tap S | Double-tap ↓ | Double-tap down |
 | Block | L | Quote | LT / L2 |
 | Pick up / grab / reload | E | Backslash | LB / L1 |
 | Cycle weapon | R; 1/2/3 select slots | Right bracket; 7/8/9 slots | Left stick click |
@@ -88,6 +100,8 @@ Ironworks has warehouse catwalks and explosive cover. Skyline has rooftop gaps, 
 | Collision / bot debug | F1 / F2 | | |
 
 Release jump early for a short hop; hold down in the air for fast fall. Climb with up/down; jump or move away to detach. Catch a ledge, then press up to pull over. Chain melee taps for a three-hit combo; up + melee uppercuts, down + melee in the air dive-kicks. Grab a nearby rival with interact, then melee to throw. Block stops melee until the guard breaks, but bullets bypass it. Fire with an empty magazine to reload automatically.
+
+Sprint starts on the second left/right press and lasts while that direction stays held. Releasing it or changing direction ends the sprint. Duck while moving to roll; double-tapping down takes priority when dropping is available. Drop-through works on platform props and one-tile-thick catwalks with clear space below; thick floors and bedrock remain solid. Existing saved key bindings are kept, so a previously bound roll key still works alongside the new gesture.
 
 Pickups require interact. Nearby pickups take priority over props. E lifts crates/barrels; attack or throw launches them. Grenades bounce and can be cooked; molotovs spread fire through combustible tiles, mines stick and arm, flashbangs blind, and smoke obstructs bot vision. Full special meter unlocks Rivet's Ground Slam, Flux's Bullet Time, Cinder's Air Strike, or Wisp's Shield Wall.
 
@@ -128,7 +142,9 @@ Open **Arena Editor** from the main menu to copy a built-in arena or start a bla
 
 Open **Controls → Customize Controls** from the main menu or pause menu to change bindings for both keyboard players, mouse buttons, and gamepad buttons/axes/deadzone. Select an action and press its new key; Escape cancels.
 
-Name your layout under **Saved control schemes** and choose **Save New**. Select a saved scheme to apply it, use **Save Changes** to update it after editing bindings, or **Rename** / **Delete** to manage it. Up to 16 named schemes are stored in this browser. Schemes include both keyboards, mouse bindings, and gamepad controls; audio and visual preferences stay independent. Current edits apply immediately and persist separately, so modifying controls does not overwrite a saved scheme until you save it. Resetting defaults keeps your saved schemes.
+Under **Movement gestures**, enable or disable double-tap sprint, duck + direction roll, and double-tap down drop-through. Adjust the **Double-tap window** from 100 to 500 ms (250 ms by default); a longer window allows slower taps. These options apply to both keyboards and all gamepads, including D-pad and movement-stick input. You can also assign dedicated sprint, roll, and drop-through buttons in the bindings list. Hold a dedicated sprint button while moving to sprint.
+
+Name your layout under **Saved control schemes** and choose **Save New**. Select a saved scheme to apply it, use **Save Changes** to update it after editing bindings, or **Rename** / **Delete** to manage it. Up to 16 named schemes are stored in this browser. Schemes include both keyboards, mouse bindings, gamepad controls, and movement gestures; audio and visual preferences stay independent. Current edits apply immediately and persist separately, so modifying controls does not overwrite a saved scheme until you save it. Resetting defaults keeps your saved schemes.
 
 **Settings** also provides these controls along with screen shake, hitstop, and separate master/SFX/music volume. Rebinding a used control swaps bindings. Settings use guarded localStorage; the game still works when browser storage is unavailable. Short action taps are buffered through hitstop. All audio is synthesized locally; click or press a key to unlock browser audio.
 
