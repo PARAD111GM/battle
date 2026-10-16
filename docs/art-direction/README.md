@@ -1,5 +1,7 @@
 # Character art and animation studies
 
+**Current direction:** use three user-selected 3D base models with the desired proportions. Read the [character model handoff](CHARACTER-MODEL-HANDOFF.md) before continuing. The studies below preserve the prototype work; their earlier plans to keep refining those bodies have been superseded.
+
 ## Shared-rig 3D prototype
 
 Three body templates now share one run animation: **small female (Katnip Neverdo), medium male (Mr. Midnight), and large muscular male (Brick Barrage)**. Their compatible skeletons have distinct proportions and matching bone names/hierarchy. The models are adapted prototype art; this establishes the animation and proportion workflow before final character modeling.

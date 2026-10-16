@@ -1,6 +1,8 @@
 # RIVETFALL
 
-An original browser arena brawler: four fighters, four destructible arenas, six guns, four melee weapons, five throwables, four specials, and up to eight local players/bots. Strict TypeScript, Phaser 3 rendering, and a separate deterministic 60 Hz simulation. Art and sound use no external assets.
+An original browser arena brawler: four fighters, four destructible arenas, six guns, four melee weapons, five throwables, four specials, and up to eight local players/bots. Strict TypeScript, Phaser 3 rendering, and a separate deterministic 60 Hz simulation. Current in-game art and sound use no external assets.
+
+For ongoing 3D character work, start with the [character model handoff](docs/art-direction/CHARACTER-MODEL-HANDOFF.md). The repository includes separate character prototypes; the current direction is to replace their bodies with user-selected models, preserving the selected proportions and sharing animations.
 
 ## Install and run on your computer
 
